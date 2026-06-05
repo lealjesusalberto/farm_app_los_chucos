@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "247168830374",
+    "project_id": "loschucosapp",
+    "storage_bucket": "loschucosapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:247168830374:android:af0a59cfb1f9ab25f8dd67",
+        "android_client_info": {
+          "package_name": "com.example.los_chucos_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "247168830374-t74apukrf9a3pdgue0tm8innrlcumj2e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfcFXFAXzqRDpcZ8iBoXHlgROXTtvXcCQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "247168830374-t74apukrf9a3pdgue0tm8innrlcumj2e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,28 @@
+{
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "loschucosapp",
+          "appId": "1:247168830374:android:af0a59cfb1f9ab25f8dd67",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "loschucosapp",
+          "configurations": {
+            "android": "1:247168830374:android:af0a59cfb1f9ab25f8dd67",
+            "ios": "1:247168830374:ios:64c4ee4dfb10d9caf8dd67",
+            "macos": "1:247168830374:ios:d1fa6cbaeccd2676f8dd67",
+            "web": "1:247168830374:web:d627f716b75356aff8dd67",
+            "windows": "1:247168830374:web:0e683c78aab3d4c2f8dd67"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "potreros": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "fieldWork": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "healthRecords": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "weightRecords": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "reproductionRecords": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'presidente'"
+      }
+    }
+  }
+}
