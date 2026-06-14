@@ -86,7 +86,7 @@ class _DeathsModuleScreenState extends State<DeathsModuleScreen> {
         onPressed: _showRegisterDeathDialog,
         backgroundColor: Colors.redAccent,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('REGISTRAR BAJA', style: TextStyle(color: Colors.white)),
+        label: const Text('Registrar Baja', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }

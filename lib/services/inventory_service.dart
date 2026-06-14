@@ -19,31 +19,57 @@ class InventoryService extends ChangeNotifier {
 
   void _listenToItems() {
     _itemsRef.onValue.listen((event) {
-      _items = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final itemData = Map<String, dynamic>.from(value);
-          _items.add(InventoryItem.fromMap(key, itemData));
-        });
+      try {
+        _items = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _items.add(InventoryItem.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _items.add(InventoryItem.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToItems: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en items: $error'));
   }
 
   void _listenToTransactions() {
     _transactionsRef.onValue.listen((event) {
-      _transactions = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final txData = Map<String, dynamic>.from(value);
-          _transactions.add(InventoryTransaction.fromMap(key, txData));
-        });
-        _transactions.sort((a, b) => b.date.compareTo(a.date));
+      try {
+        _transactions = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _transactions.add(InventoryTransaction.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _transactions.add(InventoryTransaction.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+          _transactions.sort((a, b) => b.date.compareTo(a.date));
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToTransactions: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en inventory tx: $error'));
   }
 
   List<InventoryItem> getItemsByCategory(InventoryCategory category) {

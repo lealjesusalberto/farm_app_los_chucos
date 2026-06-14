@@ -19,31 +19,57 @@ class LandService extends ChangeNotifier {
 
   void _listenToPotreros() {
     _potrerosRef.onValue.listen((event) {
-      _potreros = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final potData = Map<String, dynamic>.from(value);
-          _potreros.add(Potrero.fromMap(key, potData));
-        });
+      try {
+        _potreros = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _potreros.add(Potrero.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _potreros.add(Potrero.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToPotreros: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en potreros: $error'));
   }
 
   void _listenToFieldWork() {
     _fieldWorkRef.onValue.listen((event) {
-      _fieldWorkHistory = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final workData = Map<String, dynamic>.from(value);
-          _fieldWorkHistory.add(FieldWork.fromMap(key, workData));
-        });
-        _fieldWorkHistory.sort((a, b) => b.date.compareTo(a.date));
+      try {
+        _fieldWorkHistory = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _fieldWorkHistory.add(FieldWork.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _fieldWorkHistory.add(FieldWork.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+          _fieldWorkHistory.sort((a, b) => b.date.compareTo(a.date));
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToFieldWork: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en fieldWork: $error'));
   }
 
   Future<void> addFieldWork(FieldWork work) async {
@@ -82,5 +108,15 @@ class LandService extends ChangeNotifier {
   Future<void> addPotrero(Potrero potrero) async {
     final newRef = _potrerosRef.push();
     await newRef.set(potrero.toMap());
+  }
+
+  // Actualizar potrero existente
+  Future<void> updatePotrero(String id, Map<String, dynamic> updates) async {
+    await _potrerosRef.child(id).update(updates);
+  }
+
+  // Eliminar potrero
+  Future<void> deletePotrero(String id) async {
+    await _potrerosRef.child(id).remove();
   }
 }

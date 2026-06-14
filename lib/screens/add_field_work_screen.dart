@@ -20,7 +20,6 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
   
   String? _selectedPotreroId;
   String _type = 'Desmatonado';
-  double _cost = 0.0;
   String _responsible = '';
   String _details = '';
   DateTime _date = DateTime.now();
@@ -30,7 +29,7 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
   String? _assignedUserId;
   AppUser? _assignedUser;
 
-  final List<String> _types = ['Desmatonado', 'Fumigación', 'Fumigación Selectiva', 'Arreglo de Cerca', 'Siembra de Pasto'];
+  final List<String> _types = ['Desmatonado', 'Fumigación', 'Fumigación Selectiva', 'Arreglo de Cerca', 'Siembra de Pasto', 'Herrado', 'Vacunación'];
 
   @override
   void initState() {
@@ -66,9 +65,11 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
         elevation: 0,
         foregroundColor: AppColors.textDark,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
+      body: SafeArea(
+        bottom: true,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Form(
           key: _formKey,
           child: Column(
             children: [
@@ -84,7 +85,6 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
                         onChanged: (val) {
                           setState(() {
                             _isTaskAssignment = val;
-                            if (val) _cost = 0; // Cost is usually added when completed
                           });
                         },
                       ),
@@ -114,9 +114,10 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
                           const Text('Asignar a Obrero', style: TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             value: _assignedUserId,
                             hint: const Text('Seleccionar trabajador'),
-                            items: workers.map((w) => DropdownMenuItem(value: w.id, child: Text('${w.name} (${w.roleDisplayName})'))).toList(),
+                            items: workers.map((w) => DropdownMenuItem(value: w.id, child: Text('${w.name} (${w.roleDisplayName})', overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               setState(() {
                                 _assignedUserId = val;
@@ -148,23 +149,7 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
                 delay: const Duration(milliseconds: 200),
                 child: _buildFormCard(
                   children: [
-                    Row(
-                      children: [
-                        if (!_isTaskAssignment)
-                          Expanded(
-                            child: _buildTextField(
-                              label: 'Costo de Labor (\$)',
-                              hint: '0.00',
-                              keyboardType: TextInputType.number,
-                              onChanged: (val) => _cost = double.tryParse(val) ?? 0.0,
-                            ),
-                          ),
-                        if (!_isTaskAssignment) const SizedBox(width: 15),
-                        Expanded(
-                          child: _buildDatePicker(),
-                        ),
-                      ],
-                    ),
+                    _buildDatePicker(),
                     const SizedBox(height: 15),
                     _buildTextField(
                       label: 'Detalles / Observaciones',
@@ -195,6 +180,7 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -314,7 +300,7 @@ class _AddFieldWorkScreenState extends State<AddFieldWorkScreen> {
         potreroId: _selectedPotreroId!,
         type: _type,
         date: _date,
-        cost: _isTaskAssignment ? 0.0 : _cost,
+        cost: 0.0,
         responsible: _responsible,
         details: _details,
         status: _isTaskAssignment ? 'Pendiente' : 'Completada',

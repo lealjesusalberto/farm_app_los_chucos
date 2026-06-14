@@ -62,7 +62,7 @@ class AnimalService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Error en listener de animales: $e');
       }
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en animales: $error'));
   }
 
   void _listenToMilkRecords() {
@@ -83,7 +83,7 @@ class AnimalService extends ChangeNotifier {
         _milkRecords = temp;
         notifyListeners();
       } catch (e) {}
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en milkRecords: $error'));
   }
 
   void _listenToDeathRecords() {
@@ -104,7 +104,7 @@ class AnimalService extends ChangeNotifier {
         _deathRecords = temp;
         notifyListeners();
       } catch (e) {}
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en deathRecords: $error'));
   }
 
   void _listenToReproductionRecords() {
@@ -127,7 +127,7 @@ class AnimalService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Error en listener de reproduction: $e');
       }
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en reproductionRecords: $error'));
   }
 
   void _listenToWeightRecords() {
@@ -150,7 +150,7 @@ class AnimalService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Error en listener de weight: $e');
       }
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en weightRecords: $error'));
   }
 
   void _listenToHealthRecords() {
@@ -173,7 +173,7 @@ class AnimalService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Error en listener de health: $e');
       }
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en healthRecords: $error'));
   }
 
   void _listenToIndividualMilkRecords() {
@@ -196,23 +196,55 @@ class AnimalService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Error en listener de individual milk: $e');
       }
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en individualMilkRecords: $error'));
   }
 
   Future<void> addAnimal(Animal animal) async {
     await _animalsRef.push().set(animal.toMap());
   }
 
+  Future<void> updateAnimal(Animal animal) async {
+    await _animalsRef.child(animal.id).update(animal.toMap());
+  }
+
+  Future<void> deleteAnimal(String id) async {
+    await _animalsRef.child(id).remove();
+  }
+
   Future<void> addMilkRecord(MilkRecord record) async {
     await _milkRef.push().set(record.toMap());
+  }
+
+  Future<void> updateMilkRecord(String id, Map<String, dynamic> updates) async {
+    await _milkRef.child(id).update(updates);
+  }
+
+  Future<void> deleteMilkRecord(String id) async {
+    await _milkRef.child(id).remove();
   }
 
   Future<void> addIndividualMilkRecord(IndividualMilkRecord record) async {
     await _individualMilkRef.push().set(record.toMap());
   }
 
+  Future<void> updateIndividualMilkRecord(String id, Map<String, dynamic> updates) async {
+    await _individualMilkRef.child(id).update(updates);
+  }
+
+  Future<void> deleteIndividualMilkRecord(String id) async {
+    await _individualMilkRef.child(id).remove();
+  }
+
   Future<void> addReproductionRecord(ReproductionRecord record) async {
     await _reproductionRef.push().set(record.toMap());
+  }
+
+  Future<void> updateReproductionRecord(String id, Map<String, dynamic> updates) async {
+    await _reproductionRef.child(id).update(updates);
+  }
+
+  Future<void> deleteReproductionRecord(String id) async {
+    await _reproductionRef.child(id).remove();
   }
 
   Future<void> addWeightRecord(WeightRecord record) async {
@@ -222,6 +254,14 @@ class AnimalService extends ChangeNotifier {
     await _animalsRef.child(record.animalId).update({
       'currentWeight': record.weight,
     });
+  }
+
+  Future<void> updateWeightRecord(String id, Map<String, dynamic> updates) async {
+    await _weightRef.child(id).update(updates);
+  }
+
+  Future<void> deleteWeightRecord(String id) async {
+    await _weightRef.child(id).remove();
   }
 
   Future<void> addHealthRecord(HealthRecord record) async {

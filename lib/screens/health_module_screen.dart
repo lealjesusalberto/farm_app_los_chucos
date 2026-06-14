@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/app_colors.dart';
 import '../models/animal_models.dart';
 import '../services/animal_service.dart';
+import '../widgets/animal_selector.dart';
 
 class HealthModuleScreen extends StatelessWidget {
   const HealthModuleScreen({super.key});
@@ -39,13 +40,14 @@ class HealthModuleScreen extends StatelessWidget {
         ),
         floatingActionButton: Builder(
           builder: (context) {
-            return FloatingActionButton(
+            return FloatingActionButton.extended(
               onPressed: () {
                 final tabIndex = DefaultTabController.of(context).index;
                 _showEntryDialog(context, tabIndex);
               },
               backgroundColor: AppColors.primaryGreen,
-              child: const Icon(Icons.add_moderator, color: Colors.white),
+              icon: const Icon(Icons.add_moderator, color: Colors.white),
+              label: const Text('Registrar Sanidad', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             );
           }
         ),
@@ -122,37 +124,190 @@ class HealthModuleScreen extends StatelessWidget {
   }
 }
 
-class VaccinesTab extends StatelessWidget {
+class VaccinesTab extends StatefulWidget {
   const VaccinesTab({super.key});
+
+  @override
+  State<VaccinesTab> createState() => _VaccinesTabState();
+}
+
+class _VaccinesTabState extends State<VaccinesTab> {
+  String _searchQuery = '';
+  List<String> _selectedAgeGroups = [];
+
+  void _showFilterModal(BuildContext context) {
+    final allAgeGroups = AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20 + MediaQuery.of(context).padding.bottom),
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Filtrar por Grupo Etario', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: allAgeGroups.map((group) {
+                          final isSelected = _selectedAgeGroups.contains(group);
+                          return FilterChip(
+                            label: Text(group),
+                            selected: isSelected,
+                            selectedColor: AppColors.primaryGreen.withOpacity(0.2),
+                            checkmarkColor: AppColors.primaryGreen,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                if (selected) {
+                                  _selectedAgeGroups.add(group);
+                                } else {
+                                  _selectedAgeGroups.remove(group);
+                                }
+                              });
+                              setState(() {});
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, padding: const EdgeInsets.symmetric(vertical: 15)),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Aplicar Filtros', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AnimalService>(
       builder: (context, service, child) {
-        final records = service.healthRecords
+        final rawRecords = service.healthRecords
             .where((r) => r.type == HealthRecordType.vaccine || r.type == HealthRecordType.treatment)
             .toList();
 
-        if (records.isEmpty) {
-          return const Center(child: Text('No hay registros de vacunas o tratamientos', style: TextStyle(color: Colors.grey)));
-        }
+        final records = rawRecords.where((r) {
+          final isIndividual = r.animalId != null && r.animalId!.isNotEmpty;
+          Animal? animal;
+          if (isIndividual) {
+            final allAnimals = [...service.animals, ...service.deadAnimals];
+            animal = allAnimals.cast<Animal?>().firstWhere(
+              (a) => a?.id == r.animalId,
+              orElse: () => null,
+            );
+          }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(15),
-          itemCount: records.length,
-          itemBuilder: (context, index) {
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            final nameMatch = r.name.toLowerCase().contains(query);
+            final herdMatch = r.herd.toLowerCase().contains(query);
+            final animalMatch = animal != null && (
+              animal.code.toLowerCase().contains(query) ||
+              (animal.name ?? '').toLowerCase().contains(query)
+            );
+            if (!nameMatch && !herdMatch && !animalMatch) return false;
+          }
+
+          if (_selectedAgeGroups.isNotEmpty) {
+            if (isIndividual) {
+              if (animal == null || !_selectedAgeGroups.contains(animal.group)) return false;
+            } else {
+              if (!_selectedAgeGroups.contains(r.herd)) return false;
+            }
+          }
+
+          return true;
+        }).toList();
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 5),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar registro...',
+                        prefixIcon: const Icon(Icons.search, color: AppColors.primaryGreen),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _selectedAgeGroups.isNotEmpty ? AppColors.primaryGreen : AppColors.background,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_list, 
+                        color: _selectedAgeGroups.isNotEmpty ? Colors.white : AppColors.primaryGreen
+                      ),
+                      onPressed: () => _showFilterModal(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: records.isEmpty
+                  ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(15),
+                      itemCount: records.length,
+                      itemBuilder: (context, index) {
             final r = records[index];
             final dateStr = DateFormat('dd/MM/yyyy').format(r.date);
             
-            String alert = 'Sin refuerzo programado';
+            String alert = r.type == HealthRecordType.treatment ? 'Sin fecha de fin' : 'Sin refuerzo programado';
             if (r.nextDueDate != null) {
               final daysLeft = r.nextDueDate!.difference(DateTime.now()).inDays;
-              if (daysLeft < 0) {
-                alert = '¡Vencido hace ${daysLeft.abs()} días!';
-              } else if (daysLeft == 0) {
-                alert = '¡Refuerzo programado para HOY!';
+              if (r.type == HealthRecordType.treatment) {
+                if (daysLeft < 0) {
+                  alert = 'Finalizado hace ${daysLeft.abs()} días';
+                } else if (daysLeft == 0) {
+                  alert = 'Finaliza HOY';
+                } else {
+                  alert = 'Finaliza en $daysLeft días';
+                }
               } else {
-                alert = 'Próximo refuerzo en $daysLeft días';
+                if (daysLeft < 0) {
+                  alert = '¡Vencido hace ${daysLeft.abs()} días!';
+                } else if (daysLeft == 0) {
+                  alert = '¡Refuerzo programado para HOY!';
+                } else {
+                  alert = 'Próximo refuerzo en $daysLeft días';
+                }
               }
             }
 
@@ -182,8 +337,11 @@ class VaccinesTab extends StatelessWidget {
               ),
             );
           },
-        );
-      },
+        ),
+      ),
+    ],
+  );
+},
     );
   }
 
@@ -235,23 +393,166 @@ class VaccinesTab extends StatelessWidget {
   }
 }
 
-class BathsTab extends StatelessWidget {
+class BathsTab extends StatefulWidget {
   const BathsTab({super.key});
+
+  @override
+  State<BathsTab> createState() => _BathsTabState();
+}
+
+class _BathsTabState extends State<BathsTab> {
+  String _searchQuery = '';
+  List<String> _selectedAgeGroups = [];
+
+  void _showFilterModal(BuildContext context) {
+    final allAgeGroups = AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20 + MediaQuery.of(context).padding.bottom),
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Filtrar por Grupo Etario', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: allAgeGroups.map((group) {
+                          final isSelected = _selectedAgeGroups.contains(group);
+                          return FilterChip(
+                            label: Text(group),
+                            selected: isSelected,
+                            selectedColor: AppColors.primaryGreen.withOpacity(0.2),
+                            checkmarkColor: AppColors.primaryGreen,
+                            onSelected: (bool selected) {
+                              setModalState(() {
+                                if (selected) {
+                                  _selectedAgeGroups.add(group);
+                                } else {
+                                  _selectedAgeGroups.remove(group);
+                                }
+                              });
+                              setState(() {});
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, padding: const EdgeInsets.symmetric(vertical: 15)),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Aplicar Filtros', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        );
+      }
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AnimalService>(
       builder: (context, service, child) {
-        final records = service.healthRecords.where((r) => r.type == HealthRecordType.bath).toList();
+        final rawRecords = service.healthRecords.where((r) => r.type == HealthRecordType.bath).toList();
 
-        if (records.isEmpty) {
-          return const Center(child: Text('No hay registros de baños', style: TextStyle(color: Colors.grey)));
-        }
+        final records = rawRecords.where((r) {
+          final isIndividual = r.animalId != null && r.animalId!.isNotEmpty;
+          Animal? animal;
+          if (isIndividual) {
+            final allAnimals = [...service.animals, ...service.deadAnimals];
+            animal = allAnimals.cast<Animal?>().firstWhere(
+              (a) => a?.id == r.animalId,
+              orElse: () => null,
+            );
+          }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(15),
-          itemCount: records.length,
-          itemBuilder: (context, index) {
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            final nameMatch = r.name.toLowerCase().contains(query);
+            final herdMatch = r.herd.toLowerCase().contains(query);
+            final animalMatch = animal != null && (
+              animal.code.toLowerCase().contains(query) ||
+              (animal.name ?? '').toLowerCase().contains(query)
+            );
+            if (!nameMatch && !herdMatch && !animalMatch) return false;
+          }
+
+          if (_selectedAgeGroups.isNotEmpty) {
+            if (isIndividual) {
+              if (animal == null || !_selectedAgeGroups.contains(animal.group)) return false;
+            } else {
+              if (!_selectedAgeGroups.contains(r.herd)) return false;
+            }
+          }
+
+          return true;
+        }).toList();
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 5),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar registro...',
+                        prefixIcon: const Icon(Icons.search, color: AppColors.primaryGreen),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _selectedAgeGroups.isNotEmpty ? AppColors.primaryGreen : AppColors.background,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_list, 
+                        color: _selectedAgeGroups.isNotEmpty ? Colors.white : AppColors.primaryGreen
+                      ),
+                      onPressed: () => _showFilterModal(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: records.isEmpty
+                  ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(15),
+                      itemCount: records.length,
+                      itemBuilder: (context, index) {
             final r = records[index];
             final nextStr = r.nextDueDate != null ? DateFormat('dd/MM/yyyy').format(r.nextDueDate!) : 'No programado';
             
@@ -297,8 +598,11 @@ class BathsTab extends StatelessWidget {
               ),
             );
           },
-        );
-      },
+        ),
+      ),
+    ],
+  );
+},
     );
   }
 
@@ -359,6 +663,7 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
   
+  DateTime _startDate = DateTime.now();
   bool _scheduleNext = false;
   DateTime _nextDueDate = DateTime.now().add(const Duration(days: 30));
 
@@ -377,12 +682,26 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _nextDueDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime(2000),
       lastDate: DateTime(2101),
     );
     if (picked != null && picked != _nextDueDate) {
       setState(() {
         _nextDueDate = picked;
+      });
+    }
+  }
+
+  Future<void> _selectStartDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null && picked != _startDate) {
+      setState(() {
+        _startDate = picked;
       });
     }
   }
@@ -395,7 +714,7 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
     final filteredAnimals = animalService.animals.where((a) => a.type == _selectedAnimalType).toList();
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 20, left: 20, right: 20, top: 20),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -495,17 +814,11 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
                 ),
               )
             else
-              DropdownButtonFormField<String>(
-                value: _selectedAnimalId,
-                hint: const Text('Selecciona el Animal'),
-                items: filteredAnimals.map((a) {
-                  final displayName = a.name != null && a.name!.isNotEmpty 
-                      ? '${a.code} - ${a.name}' 
-                      : a.code;
-                  return DropdownMenuItem(value: a.id, child: Text(displayName));
-                }).toList(),
+              AnimalSelector(
+                animals: filteredAnimals,
+                selectedAnimalId: _selectedAnimalId,
+                labelText: 'Animal Específico',
                 onChanged: (val) => setState(() => _selectedAnimalId = val),
-                decoration: const InputDecoration(labelText: 'Animal Específico'),
               ),
             const SizedBox(height: 15),
 
@@ -518,9 +831,16 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
               ),
             ),
             const SizedBox(height: 15),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(_selectedType == HealthRecordType.treatment ? 'Fecha de Inicio del Tratamiento' : 'Fecha de Aplicación'),
+              subtitle: Text(DateFormat('dd/MM/yyyy').format(_startDate), style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () => _selectStartDate(context),
+            ),
 
             SwitchListTile(
-              title: const Text('¿Programar Próxima Dosis/Baño?'),
+              title: Text(_selectedType == HealthRecordType.treatment ? '¿Definir Fecha de Fin de Tratamiento?' : '¿Programar Próxima Dosis/Baño?'),
               value: _scheduleNext,
               activeColor: AppColors.primaryGreen,
               contentPadding: EdgeInsets.zero,
@@ -530,7 +850,7 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
             if (_scheduleNext)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Fecha del próximo refuerzo/baño'),
+                title: Text(_selectedType == HealthRecordType.treatment ? 'Fecha de Fin del Tratamiento' : 'Fecha del próximo refuerzo/baño'),
                 subtitle: Text(DateFormat('dd/MM/yyyy').format(_nextDueDate), style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold)),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: () => _selectDate(context),
@@ -565,7 +885,7 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
                     herd: targetHerd,
                     type: _selectedType,
                     name: _nameController.text.trim(),
-                    date: DateTime.now(),
+                    date: _startDate,
                     nextDueDate: _scheduleNext ? _nextDueDate : null,
                     notes: _notesController.text,
                     animalId: _isIndividual ? _selectedAnimalId : null,

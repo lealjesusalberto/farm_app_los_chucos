@@ -3,12 +3,17 @@ import 'package:animate_do/animate_do.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import '../models/animal_models.dart';
 import 'package:provider/provider.dart';
 import '../services/animal_service.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AddAnimalScreen extends StatefulWidget {
-  const AddAnimalScreen({super.key});
+  final Animal? animal;
+  const AddAnimalScreen({super.key, this.animal});
 
   @override
   State<AddAnimalScreen> createState() => _AddAnimalScreenState();
@@ -21,6 +26,8 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
   String _code = '';
   String? _name;
   String? _photoUrl;
+  final TextEditingController _photoUrlController = TextEditingController();
+  bool _isUploadingImage = false;
   AnimalType _selectedType = AnimalType.bovine;
   AnimalOrigin _selectedOrigin = AnimalOrigin.nacimiento;
   String _breed = '';
@@ -32,6 +39,7 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
   late String _selectedGroup;
   String? _fatherId;
   String? _motherId;
+  String? _productiveStatus;
 
   final List<String> _sexes = ['Hembra', 'Macho'];
   final List<String> _potreros = ['Potrero #1', 'Potrero #2', 'Potrero #3', 'Corral de Engorde'];
@@ -40,15 +48,99 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedGroup = _selectedType.ageGroups.first;
+    if (widget.animal != null) {
+      final a = widget.animal!;
+      _code = a.code;
+      _name = a.name;
+      _photoUrl = a.photoUrl;
+      _photoUrlController.text = _photoUrl ?? '';
+      _selectedType = a.type;
+      _selectedOrigin = a.origin;
+      _breed = a.breed;
+      _sex = a.sex;
+      _birthDate = a.birthDate;
+      _entryDate = a.entryDate;
+      _weight = a.currentWeight;
+      _productiveStatus = a.productiveStatus;
+      
+      if (_potreros.contains(a.currentLocation)) {
+        _potrero = a.currentLocation;
+      }
+      
+      if (_selectedType.ageGroups.contains(a.group)) {
+        _selectedGroup = a.group;
+      } else {
+        _selectedGroup = _selectedType.ageGroups.first;
+      }
+      
+      _fatherId = a.fatherId;
+      _motherId = a.motherId;
+    } else {
+      _selectedGroup = _selectedType.ageGroups.first;
+    }
+  }
+
+  @override
+  void dispose() {
+    _photoUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      setState(() => _isUploadingImage = true);
+      try {
+        final bytes = await pickedFile.readAsBytes();
+        
+        // Configurar Firebase Storage
+        final String fileName = 'animal_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final Reference storageRef = FirebaseStorage.instance.ref().child('animal_photos').child(fileName);
+        
+        // Subir a Storage
+        final UploadTask uploadTask = storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        final TaskSnapshot snapshot = await uploadTask;
+        
+        // Obtener la URL
+        final String imageUrl = await snapshot.ref.getDownloadURL();
+
+        if (!mounted) return;
+
+        setState(() {
+          _photoUrl = imageUrl;
+          _photoUrlController.text = imageUrl;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imagen subida a Storage exitosamente'), backgroundColor: AppColors.primaryGreen));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      } finally {
+        if (mounted) setState(() => _isUploadingImage = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final age = (now.year - _birthDate.year) * 12 + now.month - _birthDate.month;
+    final isFemaleAdult = _sex.toLowerCase() == 'hembra' && age > 36;
+    final showProductiveStatus = isFemaleAdult && (_selectedType == AnimalType.bovine || _selectedType == AnimalType.buffalo);
+    
+    // Auto-inicializar si debe mostrarse
+    if (showProductiveStatus && _productiveStatus == null) {
+      // Necesitamos un post-frame callback para no mutar estado en build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() => _productiveStatus = 'Seca');
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Registrar Nuevo Animal'),
+        title: Text(widget.animal == null ? 'Registrar Nuevo Animal' : 'Editar Animal'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.textDark,
@@ -69,14 +161,24 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
                   title: 'Información Básica',
                   icon: Icons.info_outline,
                   children: [
-                    _buildTextField(label: 'Código / Arete ID', hint: 'Ej: LC-1025', onChanged: (val) => _code = val, validator: (val) => val!.isEmpty ? 'Campo requerido' : null),
+                    _buildTextField(label: 'Código / Arete ID', hint: 'Ej: LC-1025', initialValue: _code, onChanged: (val) => _code = val, validator: (val) => val!.isEmpty ? 'Campo requerido' : null),
                     const SizedBox(height: 15),
-                    _buildTextField(label: 'Nombre (Opcional)', hint: 'Ej: Max / Luna', onChanged: (val) => _name = val),
+                    _buildTextField(label: 'Nombre (Opcional)', hint: 'Ej: Max / Luna', initialValue: _name, onChanged: (val) => _name = val),
                     const SizedBox(height: 15),
                     _buildTextField(
                       label: 'Foto del Animal (URL) (Opcional)', 
-                      hint: 'Ej: https://images.unsplash.com/photo-1543466835-00a7907e9de1', 
+                      hint: 'Ej: https://images...', 
+                      controller: _photoUrlController,
                       onChanged: (val) => setState(() => _photoUrl = val)
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: _isUploadingImage ? null : _pickAndUploadImage,
+                      icon: _isUploadingImage 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.cloud_upload),
+                      label: Text(_isUploadingImage ? 'Subiendo imagen...' : 'Subir Imagen (ImgBB)'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, foregroundColor: Colors.white),
                     ),
                     if (_photoUrl != null && _photoUrl!.isNotEmpty) ...[
                       const SizedBox(height: 10),
@@ -101,7 +203,7 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
                       ),
                     ],
                     const SizedBox(height: 15),
-                    _buildTextField(label: 'Raza', hint: 'Ej: Brahman Gris', onChanged: (val) => _breed = val, validator: (val) => val!.isEmpty ? 'Campo requerido' : null),
+                    _buildTextField(label: 'Raza', hint: 'Ej: Brahman Gris', initialValue: _breed, onChanged: (val) => _breed = val, validator: (val) => val!.isEmpty ? 'Campo requerido' : null),
                     const SizedBox(height: 15),
                     _buildDropdownField(label: 'Sexo', value: _sex, items: _sexes, onChanged: (val) => setState(() => _sex = val!)),
                     const SizedBox(height: 20),
@@ -137,7 +239,16 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
                     const SizedBox(height: 15),
                     _buildDropdownField(label: 'Grupo Etario', value: _selectedGroup, items: _groups, onChanged: (val) => setState(() => _selectedGroup = val!)),
                     const SizedBox(height: 15),
-                    _buildTextField(label: 'Peso Inicial (Kg)', hint: '0.0', keyboardType: TextInputType.number, onChanged: (val) => _weight = double.tryParse(val) ?? 0.0),
+                    if (showProductiveStatus) ...[
+                      _buildDropdownField(
+                        label: 'Estado Productivo',
+                        value: _productiveStatus ?? 'Seca',
+                        items: ['En Producción', 'Seca'],
+                        onChanged: (val) => setState(() => _productiveStatus = val!),
+                      ),
+                      const SizedBox(height: 15),
+                    ],
+                    _buildTextField(label: 'Peso Inicial (Kg)', hint: '0.0', initialValue: _weight > 0 ? _weight.toString() : null, keyboardType: TextInputType.number, onChanged: (val) => _weight = double.tryParse(val) ?? 0.0),
                   ],
                 ),
               ),
@@ -149,9 +260,9 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
                   title: 'Genealogía (Opcional)',
                   icon: Icons.family_restroom_outlined,
                   children: [
-                    _buildTextField(label: 'ID del Padre', hint: 'Código del Toro', onChanged: (val) => _fatherId = val),
+                    _buildTextField(label: 'ID del Padre', hint: 'Código del Toro', initialValue: _fatherId, onChanged: (val) => _fatherId = val),
                     const SizedBox(height: 15),
-                    _buildTextField(label: 'ID de la Madre', hint: 'Código de la Vaca', onChanged: (val) => _motherId = val),
+                    _buildTextField(label: 'ID de la Madre', hint: 'Código de la Vaca', initialValue: _motherId, onChanged: (val) => _motherId = val),
                   ],
                 ),
               ),
@@ -242,8 +353,8 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
     return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, color: AppColors.primaryGreen, size: 20), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textDark))]), const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider()), ...children]));
   }
 
-  Widget _buildTextField({required String label, required String hint, TextInputType keyboardType = TextInputType.text, Function(String)? onChanged, String? Function(String?)? validator}) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textGrey, fontWeight: FontWeight.w500)), const SizedBox(height: 8), TextFormField(keyboardType: keyboardType, onChanged: onChanged, validator: validator, decoration: InputDecoration(hintText: hint, hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14), filled: true, fillColor: AppColors.background.withOpacity(0.5), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5))))]);
+  Widget _buildTextField({required String label, required String hint, TextInputType keyboardType = TextInputType.text, Function(String)? onChanged, String? Function(String?)? validator, TextEditingController? controller, String? initialValue}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textGrey, fontWeight: FontWeight.w500)), const SizedBox(height: 8), TextFormField(controller: controller, initialValue: controller == null ? initialValue : null, keyboardType: keyboardType, onChanged: onChanged, validator: validator, decoration: InputDecoration(hintText: hint, hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14), filled: true, fillColor: AppColors.background.withOpacity(0.5), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5))))]);
   }
 
   Widget _buildDropdownField({required String label, required String value, required List<String> items, required Function(String?) onChanged}) {
@@ -258,9 +369,13 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
     if (_formKey.currentState!.validate()) {
       showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
       try {
+        final age = (DateTime.now().year - _birthDate.year) * 12 + DateTime.now().month - _birthDate.month;
+        final isFemaleAdult = _sex.toLowerCase() == 'hembra' && age > 36;
+        final showProductiveStatus = isFemaleAdult && (_selectedType == AnimalType.bovine || _selectedType == AnimalType.buffalo);
+
         final animalService = Provider.of<AnimalService>(context, listen: false);
         final newAnimal = Animal(
-          id: DateTime.now().millisecondsSinceEpoch.toString(), 
+          id: widget.animal?.id ?? DateTime.now().millisecondsSinceEpoch.toString(), 
           code: _code, 
           name: _name,
           photoUrl: _photoUrl,
@@ -275,11 +390,17 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
           group: _selectedGroup, 
           fatherId: _fatherId, 
           motherId: _motherId,
+          status: widget.animal?.status ?? 'active',
+          productiveStatus: showProductiveStatus ? _productiveStatus : null,
         );
-        await animalService.addAnimal(newAnimal);
+        if (widget.animal != null) {
+          await animalService.updateAnimal(newAnimal);
+        } else {
+          await animalService.addAnimal(newAnimal);
+        }
         if (!mounted) return;
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registro guardado exitosamente'), backgroundColor: AppColors.primaryGreen));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.animal != null ? 'Animal actualizado' : 'Registro guardado exitosamente'), backgroundColor: AppColors.primaryGreen));
         Navigator.pop(context);
       } catch (e) {
         if (!mounted) return;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../core/app_colors.dart';
 import '../models/land_models.dart';
+import '../models/animal_models.dart';
 import 'package:provider/provider.dart';
 import '../services/land_service.dart';
 
@@ -13,22 +14,29 @@ class CattleRotationScreen extends StatefulWidget {
 }
 
 class _CattleRotationScreenState extends State<CattleRotationScreen> {
+  String? _selectedAgeGroup;
   String? _selectedSourcePotreroId;
   String? _selectedTargetPotreroId;
-  String _lotName = '';
+  
+  late List<String> _allAgeGroups;
+
+  @override
+  void initState() {
+    super.initState();
+    _allAgeGroups = AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
+  }
 
   @override
   Widget build(BuildContext context) {
     final landService = Provider.of<LandService>(context);
     final potreros = landService.potreros;
 
-    // Potreros that have cattle
-    final sourceOptions = potreros.where((p) => p.currentCattleLot.isNotEmpty).toList();
-    // Potreros that are available or in rest
+    // Todos los potreros pueden ser origen (incluso si no tienen ganado asignado, para correcciones)
+    final sourceOptions = potreros.toList();
+    // Potreros de destino (excluyendo el seleccionado como origen)
     final targetOptions = potreros.where((p) => p.id != _selectedSourcePotreroId).toList();
 
-    // Validación de seguridad: asegurar que los valores seleccionados existan en las opciones actuales
-    // Esto evita el error de aserción si la lista de opciones cambia durante un redibujado
+    // Validación de seguridad
     if (_selectedSourcePotreroId != null && !sourceOptions.any((p) => p.id == _selectedSourcePotreroId)) {
       _selectedSourcePotreroId = null;
     }
@@ -58,42 +66,62 @@ class _CattleRotationScreenState extends State<CattleRotationScreen> {
             const SizedBox(height: 20),
             
             FadeInUp(
+              child: _buildSelectionCard(
+                title: 'GRUPO ETARIO A ROTAR',
+                icon: Icons.pets,
+                color: Colors.blue,
+                child: _buildDropdown(
+                  label: 'Seleccionar Grupo Etario',
+                  value: _selectedAgeGroup,
+                  items: _allAgeGroups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedAgeGroup = val;
+                      
+                      // Auto-select source if we find a potrero with this group
+                      final match = potreros.where((p) => p.currentCattleLot == val).toList();
+                      if (match.isNotEmpty) {
+                        _selectedSourcePotreroId = match.first.id;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Icon(Icons.arrow_downward, color: Colors.blue, size: 24),
+              ),
+            ),
+            
+            FadeInUp(
               delay: const Duration(milliseconds: 200),
               child: _buildSelectionCard(
-                title: 'ORIGEN',
+                title: 'ORIGEN (Opcional)',
                 icon: Icons.logout,
                 color: Colors.orange,
-                child: Column(
-                  children: [
-                    _buildDropdown(
-                      label: 'Potrero Actual',
-                      value: _selectedSourcePotreroId,
-                      items: sourceOptions.map((p) => DropdownMenuItem(
-                        value: p.id, 
-                        child: Text(
-                          '${p.name} (${p.currentCattleLot})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedSourcePotreroId = val;
-                          final p = sourceOptions.firstWhere((element) => element.id == val);
-                          _lotName = p.currentCattleLot;
-                          
-                          // Evitar error de aserción: si el destino es igual al nuevo origen, lo reseteamos
-                          if (_selectedTargetPotreroId == _selectedSourcePotreroId) {
-                            _selectedTargetPotreroId = null;
-                          }
-                        });
-                      },
-                    ),
-                    if (_lotName.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Text('Lote a mover: $_lotName', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                child: _buildDropdown(
+                  label: 'Potrero Actual',
+                  value: _selectedSourcePotreroId,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Ninguno (Ingreso Externo)')),
+                    ...sourceOptions.map((p) => DropdownMenuItem(
+                      value: p.id, 
+                      child: Text(
+                        '${p.name} ${p.currentCattleLot.isNotEmpty ? "(${p.currentCattleLot})" : ""}',
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    )),
                   ],
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedSourcePotreroId = val;
+                      if (_selectedTargetPotreroId == _selectedSourcePotreroId) {
+                        _selectedTargetPotreroId = null;
+                      }
+                    });
+                  },
                 ),
               ),
             ),
@@ -134,7 +162,7 @@ class _CattleRotationScreenState extends State<CattleRotationScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: (_selectedSourcePotreroId != null && _selectedTargetPotreroId != null) 
+                  onPressed: (_selectedAgeGroup != null && _selectedTargetPotreroId != null) 
                       ? _performRotation 
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -218,7 +246,7 @@ class _CattleRotationScreenState extends State<CattleRotationScreen> {
 
   void _performRotation() async {
     final landService = Provider.of<LandService>(context, listen: false);
-    await landService.rotateCattle(_selectedSourcePotreroId!, _selectedTargetPotreroId!, _lotName);
+    await landService.rotateCattle(_selectedSourcePotreroId ?? '', _selectedTargetPotreroId!, _selectedAgeGroup!);
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Rebaño movido exitosamente a ${_selectedTargetPotreroId}')),

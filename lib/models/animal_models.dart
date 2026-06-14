@@ -20,6 +20,7 @@ class Animal {
   final String? fatherId;
   final String? motherId;
   final String status;
+  final String? productiveStatus; // 'En Producción', 'Seca'
 
   Animal({
     required this.id,
@@ -38,11 +39,72 @@ class Animal {
     this.fatherId,
     this.motherId,
     this.status = 'active',
+    this.productiveStatus,
   });
 
   int get ageInMonths {
     final now = DateTime.now();
     return (now.year - birthDate.year) * 12 + now.month - birthDate.month;
+  }
+
+  String get ageGroupDisplayName {
+    final age = ageInMonths;
+    final isMale = sex.toLowerCase() == 'macho';
+
+    if (type == AnimalType.buffalo) {
+      if (isMale) {
+        if (age <= 12) return 'Bucerros';
+        if (age <= 24) return 'Bumautes';
+        if (age <= 36) return 'Buvillos';
+        return 'Búfalos';
+      } else {
+        if (age <= 12) return 'Bucerras';
+        if (age <= 24) return 'Bumautas';
+        if (age <= 36) return 'Buvillas';
+        
+        if (productiveStatus == 'En Producción') {
+          return 'Búfalas en prod';
+        } else if (productiveStatus == 'Seca') {
+          return 'Búfalas secas';
+        }
+        return 'Búfalas';
+      }
+    } else if (type == AnimalType.bovine) {
+      if (isMale) {
+        if (age <= 12) return 'Becerros';
+        if (age <= 24) return 'Mautes';
+        if (age <= 36) return 'Novillos';
+        return 'Toros';
+      } else {
+        if (age <= 12) return 'Becerras';
+        if (age <= 24) return 'Mautas';
+        if (age <= 36) return 'Novillas';
+        
+        if (productiveStatus == 'En Producción') {
+          return 'Vacas en prod';
+        } else if (productiveStatus == 'Seca') {
+          return 'Vacas secas';
+        }
+        return 'Vacas';
+      }
+    } else if (type == AnimalType.porcine) {
+      if (age <= 1) return 'Lechon Maternidad';
+      if (age <= 2) return 'Lechon Bateria';
+      if (age <= 4) return 'Lechon Crecimiento';
+      if (age <= 6) return isMale ? 'Lechon Engorde' : 'Levantes';
+      
+      if (isMale) {
+        return 'Verracos';
+      } else {
+        return 'Hembra Reproductora';
+      }
+    } else if (type == AnimalType.equine) {
+      if (age <= 36) return 'Potros';
+      return isMale ? 'Caballos' : 'Yeguas';
+    } else {
+      if (age <= 6) return 'Jóvenes (0-6m)';
+      return 'Adultos (>6m)';
+    }
   }
 
   Map<String, dynamic> toMap() {
@@ -62,6 +124,7 @@ class Animal {
       'fatherId': fatherId,
       'motherId': motherId,
       'status': status,
+      'productiveStatus': productiveStatus,
     };
   }
 
@@ -78,11 +141,12 @@ class Animal {
       entryDate: DateTime.tryParse(map['entryDate']?.toString() ?? '') ?? (DateTime.tryParse(map['birthDate']?.toString() ?? '') ?? DateTime.now()),
       origin: _parseOrigin(map['origin']),
       currentWeight: _parseDouble(map['currentWeight']),
-      currentLocation: map['currentLocation']?.toString() ?? 'General',
+      currentLocation: map['currentLocation']?.toString() ?? 'N/A',
       group: map['group']?.toString() ?? 'General',
       fatherId: map['fatherId']?.toString(),
       motherId: map['motherId']?.toString(),
       status: map['status']?.toString() ?? 'active',
+      productiveStatus: map['productiveStatus']?.toString(),
     );
   }
 
@@ -189,6 +253,8 @@ class ReproductionRecord {
   final String animalId;
   final ReproductionRecordType type;
   final DateTime date;
+  final DateTime? pregnancyDate;
+  final DateTime? deliveryDate;
   final String? bullName;
   final String? serviceType; // e.g. "IA", "Monta Natural"
   final bool? isPregnant;
@@ -200,6 +266,8 @@ class ReproductionRecord {
     required this.animalId,
     required this.type,
     required this.date,
+    this.pregnancyDate,
+    this.deliveryDate,
     this.bullName,
     this.serviceType,
     this.isPregnant,
@@ -212,6 +280,8 @@ class ReproductionRecord {
       'animalId': animalId,
       'type': type.name,
       'date': date.toIso8601String(),
+      'pregnancyDate': pregnancyDate?.toIso8601String(),
+      'deliveryDate': deliveryDate?.toIso8601String(),
       'bullName': bullName,
       'serviceType': serviceType,
       'isPregnant': isPregnant,
@@ -226,6 +296,8 @@ class ReproductionRecord {
       animalId: map['animalId']?.toString() ?? '',
       type: _parseReproductionType(map['type']),
       date: DateTime.tryParse(map['date']?.toString() ?? '') ?? DateTime.now(),
+      pregnancyDate: map['pregnancyDate'] != null ? DateTime.tryParse(map['pregnancyDate'].toString()) : null,
+      deliveryDate: map['deliveryDate'] != null ? DateTime.tryParse(map['deliveryDate'].toString()) : null,
       bullName: map['bullName']?.toString(),
       serviceType: map['serviceType']?.toString(),
       isPregnant: map['isPregnant'] as bool?,
@@ -343,13 +415,18 @@ extension AnimalTypeGroups on AnimalType {
   List<String> get ageGroups {
     switch (this) {
       case AnimalType.bovine:
-        return ['Vaca', 'Toro', 'Novilla', 'Novillo', 'Maute', 'Becerro', 'Becerra'];
+        return ['Vacas', 'Toros', 'Vacas en prod', 'Vacas secas', 'Novillos', 'Novillas', 'Mautes', 'Mautas', 'Becerros', 'Becerras', 'Cuero'];
       case AnimalType.buffalo:
-        return ['Búfalo', 'Búfala', 'Bubilla', 'Bubillo'];
+        return ['Búfalos', 'Búfalas', 'Búfalas en prod', 'Búfalas secas', 'Buvillos', 'Buvillas', 'Bumautes', 'Bumautas', 'Bucerros', 'Bucerras'];
       case AnimalType.equine:
-        return ['Yegua', 'Caballo', 'Potro', 'Potra', 'Mula', 'Burro'];
+        return ['Burra', 'Burro', 'Caballos', 'Machos', 'Mula', 'Mulo', 'Potros', 'Yeguas'];
       case AnimalType.porcine:
-        return ['Paridoras', 'Padrotes', 'Gestantes', 'Lechones', 'Engorde'];
+        return [
+          'Hembra Reproductora', 'Hembra Reemplazo', 'Hembra Descarte', 'Vientres',
+          'Macho Reproductor', 'Verracos',
+          'Lechon Maternidad', 'Lechon Bateria', 'Lechon Crecimiento', 
+          'Lechon Engorde', 'Levantes', 'Lechones'
+        ];
       case AnimalType.poultry:
         return ['Gallina', 'Gallo', 'Pollo', 'Polla'];
       case AnimalType.dog:

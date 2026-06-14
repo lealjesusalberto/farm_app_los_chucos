@@ -4,6 +4,11 @@ import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
 import '../models/animal_models.dart';
+import 'package:provider/provider.dart';
+import '../services/animal_service.dart';
+import '../services/auth_service.dart';
+import '../models/user_models.dart';
+import 'add_animal_screen.dart';
 
 class AnimalDetailScreen extends StatelessWidget {
   final Animal animal;
@@ -12,42 +17,80 @@ class AnimalDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FadeInUp(child: _buildMainStats()),
-                  const SizedBox(height: 25),
-                  FadeInUp(delay: const Duration(milliseconds: 200), child: _buildInfoSection()),
-                  const SizedBox(height: 25),
-                  FadeInUp(delay: const Duration(milliseconds: 400), child: _buildGenealogySection()),
-                  const SizedBox(height: 100), // Espacio para el bottom
-                ],
+    return Consumer<AnimalService>(
+      builder: (context, service, _) {
+        // Find latest version of the animal to ensure real-time updates
+        final currentAnimal = service.animals.firstWhere(
+          (a) => a.id == animal.id,
+          orElse: () => animal,
+        );
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: CustomScrollView(
+            slivers: [
+              _buildSliverAppBar(context, currentAnimal),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 25),
+                      FadeInUp(child: _buildMainStats(currentAnimal)),
+                      const SizedBox(height: 25),
+                      FadeInUp(
+                        delay: const Duration(milliseconds: 200),
+                        child: _buildInfoSection(currentAnimal),
+                      ),
+                      const SizedBox(height: 25),
+                      FadeInUp(
+                        delay: const Duration(milliseconds: 400),
+                        child: _buildGenealogySection(currentAnimal),
+                      ),
+                      const SizedBox(height: 25),
+                      FadeInUp(
+                        delay: const Duration(milliseconds: 500),
+                        child: _buildProductionHistory(context, currentAnimal),
+                      ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildSliverAppBar() {
+  Widget _buildSliverAppBar(BuildContext context, Animal currentAnimal) {
+    final authService = Provider.of<AuthService>(context);
+    final user = authService.currentUser;
+    
     String imagePath = 'assets/types/bovine.png';
-    switch (animal.type) {
-      case AnimalType.bovine: imagePath = 'assets/types/bovine.png'; break;
-      case AnimalType.porcine: imagePath = 'assets/types/porcine.png'; break;
-      case AnimalType.buffalo: imagePath = 'assets/types/buffalo.png'; break;
-      case AnimalType.equine: imagePath = 'assets/types/equine.png'; break;
-      case AnimalType.poultry: imagePath = 'assets/types/poultry.png'; break;
-      case AnimalType.dog: imagePath = 'assets/types/dog.png'; break;
-      default: imagePath = 'assets/types/bovine.png';
+    switch (currentAnimal.type) {
+      case AnimalType.bovine:
+        imagePath = 'assets/types/bovine.png';
+        break;
+      case AnimalType.porcine:
+        imagePath = 'assets/types/porcine.png';
+        break;
+      case AnimalType.buffalo:
+        imagePath = 'assets/types/buffalo.png';
+        break;
+      case AnimalType.equine:
+        imagePath = 'assets/types/equine.png';
+        break;
+      case AnimalType.poultry:
+        imagePath = 'assets/types/poultry.png';
+        break;
+      case AnimalType.dog:
+        imagePath = 'assets/types/dog.png';
+        break;
+      default:
+        imagePath = 'assets/types/bovine.png';
     }
 
     final hasPhoto = animal.photoUrl != null && animal.photoUrl!.isNotEmpty;
@@ -56,14 +99,95 @@ class AnimalDetailScreen extends StatelessWidget {
       expandedHeight: 240,
       pinned: true,
       backgroundColor: AppColors.primaryGreen,
+      actions: [
+        if (user?.canUpdateOrDeleteRecords == true)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+              tooltip: 'Editar Animal',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddAnimalScreen(animal: animal),
+                  ),
+                );
+              },
+            ),
+          ),
+        if (user?.canUpdateOrDeleteRecords == true)
+          Container(
+          margin: const EdgeInsets.only(right: 12, left: 4, top: 8, bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.delete_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            tooltip: 'Eliminar Animal',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Eliminar Animal'),
+                  content: const Text(
+                    '¿Estás seguro de que deseas eliminar este registro permanentemente?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text(
+                        'Cancelar',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        final animalService = Provider.of<AnimalService>(
+                          context,
+                          listen: false,
+                        );
+                        await animalService.deleteAnimal(animal.id);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Animal eliminado exitosamente'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text(
+                        'Eliminar',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
-          animal.name != null && animal.name!.isNotEmpty 
-              ? '${animal.name} (${animal.code})' 
-              : 'Animal ${animal.code}', 
+          animal.name != null && animal.name!.isNotEmpty
+              ? '${animal.name} (${animal.code})'
+              : 'Animal ${animal.code}',
           style: const TextStyle(
-            color: Colors.white, 
-            fontWeight: FontWeight.bold, 
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
             fontSize: 18,
             shadows: [
               Shadow(
@@ -72,7 +196,7 @@ class AnimalDetailScreen extends StatelessWidget {
                 color: Colors.black87,
               ),
             ],
-          )
+          ),
         ),
         background: Stack(
           fit: StackFit.expand,
@@ -84,7 +208,11 @@ class AnimalDetailScreen extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Container(
                   color: Colors.grey[300],
                   child: const Center(
-                    child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                    child: Icon(
+                      Icons.broken_image,
+                      size: 50,
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
               ),
@@ -124,75 +252,121 @@ class AnimalDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMainStats() {
+  Widget _buildMainStats(Animal currentAnimal) {
     return Row(
       children: [
-        _buildStatCard('Peso Actual', '${animal.currentWeight} Kg', FontAwesomeIcons.weightHanging, Colors.orange),
+        _buildStatCard(
+          'Peso Actual',
+          '${currentAnimal.currentWeight} Kg',
+          FontAwesomeIcons.weightHanging,
+          Colors.orange,
+        ),
         const SizedBox(width: 15),
-        _buildStatCard('Edad', '${animal.ageInMonths} meses', FontAwesomeIcons.calendarDay, Colors.blue),
+        _buildStatCard(
+          'Edad',
+          '${currentAnimal.ageInMonths} meses',
+          FontAwesomeIcons.calendarDay,
+          Colors.blue,
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10),
+          ],
         ),
         child: Column(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 10),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoSection() {
+  Widget _buildInfoSection(Animal currentAnimal) {
     return _buildSectionContainer(
       title: 'Detalles del Animal',
       icon: Icons.info_outline,
       children: [
-        if (animal.name != null && animal.name!.isNotEmpty)
-          _buildDetailRow('Nombre', animal.name!),
-        _buildDetailRow('Origen', animal.origin.name[0].toUpperCase() + animal.origin.name.substring(1)),
-        _buildDetailRow('Raza', animal.breed),
-        _buildDetailRow('Sexo', animal.sex),
-        _buildDetailRow('F. Nacimiento', DateFormat('dd/MM/yyyy').format(animal.birthDate)),
-        _buildDetailRow('F. Ingreso', DateFormat('dd/MM/yyyy').format(animal.entryDate)),
-        _buildDetailRow('Ubicación Actual', animal.currentLocation),
-        _buildDetailRow('Grupo Etario', animal.group),
-        _buildDetailRow('Estado', animal.status == 'active' ? 'Activo' : 'Baja', isLast: true),
+        if (currentAnimal.name != null && currentAnimal.name!.isNotEmpty)
+          _buildDetailRow('Nombre', currentAnimal.name!),
+        _buildDetailRow(
+          'Origen',
+          currentAnimal.origin.name[0].toUpperCase() + currentAnimal.origin.name.substring(1),
+        ),
+        _buildDetailRow('Raza', currentAnimal.breed),
+        _buildDetailRow('Sexo', currentAnimal.sex),
+        _buildDetailRow(
+          'F. Nacimiento',
+          DateFormat('dd/MM/yyyy').format(currentAnimal.birthDate),
+        ),
+        _buildDetailRow(
+          'F. Ingreso',
+          DateFormat('dd/MM/yyyy').format(currentAnimal.entryDate),
+        ),
+        _buildDetailRow('Ubicación Actual', currentAnimal.currentLocation),
+        _buildDetailRow('Grupo Etario', currentAnimal.group),
+        _buildDetailRow(
+          'Estado',
+          currentAnimal.status == 'active' ? 'Activo' : 'Baja',
+          isLast: true,
+        ),
       ],
     );
   }
 
-  Widget _buildGenealogySection() {
+  Widget _buildGenealogySection(Animal currentAnimal) {
     return _buildSectionContainer(
       title: 'Genealogía',
       icon: Icons.family_restroom,
       children: [
-        _buildDetailRow('Padre (Toro)', animal.fatherId ?? 'Desconocido'),
-        _buildDetailRow('Madre (Vaca)', animal.motherId ?? 'Desconocido', isLast: true),
+        _buildDetailRow('Padre (Toro)', currentAnimal.fatherId ?? 'Desconocido'),
+        _buildDetailRow(
+          'Madre (Vaca)',
+          currentAnimal.motherId ?? 'Desconocido',
+          isLast: true,
+        ),
       ],
     );
   }
 
-  Widget _buildSectionContainer({required String title, required IconData icon, required List<Widget> children}) {
+  Widget _buildSectionContainer({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(25),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,7 +375,13 @@ class AnimalDetailScreen extends StatelessWidget {
             children: [
               Icon(icon, color: AppColors.primaryGreen, size: 20),
               const SizedBox(width: 10),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
           const Divider(height: 30),
@@ -218,9 +398,79 @@ class AnimalDetailScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildProductionHistory(BuildContext context, Animal currentAnimal) {
+    final animalService = Provider.of<AnimalService>(context);
+    final List<Widget> sections = [];
+
+    if (currentAnimal.type == AnimalType.bovine || currentAnimal.type == AnimalType.buffalo) {
+      if (currentAnimal.sex.toLowerCase() == 'hembra') {
+        final records = animalService.individualMilkRecords
+            .where((r) => r.animalId == currentAnimal.id)
+            .toList();
+        if (records.isNotEmpty) {
+          final topRecords = records.take(5).toList();
+          final List<Widget> children = topRecords.map((r) => _buildDetailRow(
+            DateFormat('dd/MM/yyyy').format(r.date),
+            '${r.liters} Lts (${r.amOrPm})',
+            isLast: r == topRecords.last,
+          )).toList();
+          
+          if (records.length > 5) {
+            children.add(
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Center(child: Text('Mostrando últimos 5 registros', style: TextStyle(color: Colors.grey, fontSize: 12))),
+              )
+            );
+          }
+          
+          sections.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 25),
+              child: _buildSectionContainer(
+                title: 'Historial de Leche',
+                icon: FontAwesomeIcons.droplet,
+                children: children,
+              ),
+            )
+          );
+        }
+      }
+    }
+
+    final weightRecords = animalService.weightRecords
+        .where((r) => r.animalId == animal.id)
+        .toList();
+    if (weightRecords.isNotEmpty) {
+      final topRecords = weightRecords.take(5).toList();
+      final List<Widget> children = topRecords.map((r) => _buildDetailRow(
+        DateFormat('dd/MM/yyyy').format(r.date),
+        '${r.weight} Kg',
+        isLast: r == topRecords.last,
+      )).toList();
+      
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 25),
+          child: _buildSectionContainer(
+            title: 'Historial de Pesajes',
+            icon: FontAwesomeIcons.weightHanging,
+            children: children,
+          ),
+        )
+      );
+    }
+
+    if (sections.isEmpty) return const SizedBox.shrink();
+    return Column(children: sections);
   }
 }

@@ -33,46 +33,85 @@ class FinanceService extends ChangeNotifier {
 
   void _listenToTransactions() {
     _transactionsRef.onValue.listen((event) {
-      _transactions = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final txData = Map<String, dynamic>.from(value);
-          _transactions.add(FinanceTransaction.fromMap(key, txData));
-        });
-        _transactions.sort((a, b) => b.date.compareTo(a.date));
+      try {
+        _transactions = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _transactions.add(FinanceTransaction.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _transactions.add(FinanceTransaction.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+          _transactions.sort((a, b) => b.date.compareTo(a.date));
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToTransactions: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en finance tx: $error'));
   }
 
   void _listenToEmployees() {
     _employeesRef.onValue.listen((event) {
-      _employees = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final empData = Map<String, dynamic>.from(value);
-          _employees.add(Employee.fromMap(key, empData));
-        });
+      try {
+        _employees = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _employees.add(Employee.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _employees.add(Employee.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToEmployees: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en employees: $error'));
   }
 
   void _listenToPayroll() {
     _payrollRef.onValue.listen((event) {
-      _payrollHistory = [];
-      if (event.snapshot.exists) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        data.forEach((key, value) {
-          final prData = Map<String, dynamic>.from(value);
-          _payrollHistory.add(PayrollRecord.fromMap(key, prData));
-        });
-        _payrollHistory.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+      try {
+        _payrollHistory = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                _payrollHistory.add(PayrollRecord.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+          } else if (data is List) {
+            for (int i = 0; i < data.length; i++) {
+              if (data[i] is Map) {
+                _payrollHistory.add(PayrollRecord.fromMap(i.toString(), Map<String, dynamic>.from(data[i])));
+              }
+            }
+          }
+          _payrollHistory.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+        }
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en _listenToPayroll: $e');
       }
-      notifyListeners();
-    });
+    }, onError: (error) => debugPrint('Permiso denegado en payroll: $error'));
   }
 
   Future<void> addTransaction(FinanceTransaction transaction) async {

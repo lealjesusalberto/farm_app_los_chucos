@@ -1,32 +1,25 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
-    "potreros": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "fieldWork": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "healthRecords": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "weightRecords": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "reproductionRecords": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
     "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'presidente'",
       "$uid": {
-        ".read": "auth != null",
-        ".write": "auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'presidente'"
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'presidente' || auth.token.email === 'admin@loschucos.com')"
       }
-    }
+    },
+    "healthRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "weightRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "reproductionRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "animals": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "milkRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "individualMilkRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "deathRecords": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "financeTransactions": { ".read": "auth != null", ".write": "auth != null" },
+    "employees": { ".read": "auth != null", ".write": "auth != null" },
+    "payrollRecords": { ".read": "auth != null", ".write": "auth != null" },
+    "inventoryItems": { ".read": "auth != null", ".write": "auth != null" },
+    "inventoryTransactions": { ".read": "auth != null", ".write": "auth != null" },
+    "potreros": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
+    "fieldWork": { ".read": "auth != null", ".write": "auth != null" }
   }
 }

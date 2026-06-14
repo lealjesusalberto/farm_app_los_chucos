@@ -4,6 +4,7 @@ class Potrero {
   final double areaTareas;
   final String status; // 'Disponible', 'En Descanso', 'En Mantenimiento'
   final String currentCattleLot; // ID del lote de animales actualmente ahí
+  final String purpose; // Utilidad del potrero (Maternidad, Engorde, etc.)
 
   Potrero({
     required this.id,
@@ -11,6 +12,7 @@ class Potrero {
     required this.areaTareas,
     this.status = 'Disponible',
     this.currentCattleLot = '',
+    this.purpose = 'General',
   });
 
   double get areaHectares => areaTareas / 15.9; // Factor de conversión estándar (aprox)
@@ -21,6 +23,7 @@ class Potrero {
       'areaTareas': areaTareas,
       'status': status,
       'currentCattleLot': currentCattleLot,
+      'purpose': purpose,
     };
   }
 
@@ -31,6 +34,7 @@ class Potrero {
       areaTareas: (map['areaTareas'] ?? 0).toDouble(),
       status: map['status'] ?? 'Disponible',
       currentCattleLot: map['currentCattleLot'] ?? '',
+      purpose: map['purpose'] ?? 'General',
     );
   }
 }

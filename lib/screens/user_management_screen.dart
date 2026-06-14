@@ -48,7 +48,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         onPressed: _showAddUserDialog,
         backgroundColor: AppColors.primaryGreen,
         icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('NUEVO USUARIO', style: TextStyle(color: Colors.white)),
+        label: const Text('Registrar Usuario', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -79,9 +79,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-            onPressed: () => _confirmDelete(context, user),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+                onPressed: () => _showEditUserDialog(context, user),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                onPressed: () => _confirmDelete(context, user),
+              ),
+            ],
           ),
         ],
       ),
@@ -110,8 +119,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
+        builder: (context, setModalState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,6 +189,79 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
             const SizedBox(height: 20),
           ],
+        ),
+      ),
+      ),
+    ),
+  );
+}
+
+  void _showEditUserDialog(BuildContext context, AppUser user) {
+    final nameController = TextEditingController(text: user.name);
+    UserRole selectedRole = user.role;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Editar Usuario', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre Completo')),
+              const SizedBox(height: 15),
+              DropdownButtonFormField<UserRole>(
+                value: selectedRole,
+                decoration: const InputDecoration(labelText: 'Rol en la Finca'),
+                items: UserRole.values.map((role) {
+                  return DropdownMenuItem(
+                    value: role,
+                    child: Text(AppUser(id: '', email: '', name: '', role: role).roleDisplayName),
+                  );
+                }).toList(),
+                onChanged: (val) => selectedRole = val!,
+              ),
+              const SizedBox(height: 25),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.isNotEmpty) {
+                      final authService = Provider.of<AuthService>(context, listen: false);
+                      final success = await authService.updateUser(
+                        user.id,
+                        name: nameController.text,
+                        role: selectedRole,
+                      );
+                      
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        if (!success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Error al actualizar usuario'), backgroundColor: Colors.red),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Usuario actualizado'), backgroundColor: Colors.green),
+                          );
+                        }
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen),
+                  child: const Text('GUARDAR CAMBIOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     ),

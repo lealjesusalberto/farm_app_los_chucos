@@ -9,9 +9,12 @@ import '../services/land_service.dart';
 import '../models/user_models.dart';
 import '../models/animal_models.dart';
 import 'animal_production_screen.dart';
+import 'production_summary_screen.dart';
 import 'potreros_module_screen.dart';
 import 'inventory_hub_screen.dart';
 import 'finance_hub_screen.dart';
+import 'package:intl/intl.dart';
+import '../models/land_models.dart';
 import 'user_management_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -23,33 +26,40 @@ class DashboardScreen extends StatelessWidget {
     final user = authService.currentUser;
 
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(context, user),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('Resumen de Producción'),
-                  const SizedBox(height: 15),
-                  _buildStatsGrid(context),
-                  const SizedBox(height: 30),
-                  _buildSectionTitle('Módulos Principales'),
-                  const SizedBox(height: 15),
-                  _buildModulesGrid(context, user),
-                ],
+      drawer: _buildDrawer(context, user),
+      body: Builder(
+        builder: (ctx) => SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildHeader(ctx, user),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('Resumen de Producción', onSeeAll: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductionSummaryScreen()));
+                    }),
+                    const SizedBox(height: 15),
+                    _buildStatsGrid(context),
+                    const SizedBox(height: 30),
+                    _buildSectionTitle('Módulos Principales'),
+                    const SizedBox(height: 15),
+                    _buildModulesGrid(context, user),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
   Widget _buildHeader(BuildContext context, AppUser? user) {
+    final landService = Provider.of<LandService>(context);
+    final pendingTasks = landService.fieldWorkHistory.where((w) => w.assignedToUserId == user?.id && w.status == 'Pendiente').toList();
+
     return Stack(
       children: [
         Container(
@@ -92,62 +102,83 @@ class DashboardScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 25,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.person, color: AppColors.primaryGreen),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hola, ${user?.name ?? "Usuario"}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: () => Scaffold.of(context).openDrawer(),
+                            child: const CircleAvatar(
+                              radius: 25,
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person, color: AppColors.primaryGreen),
                             ),
-                            Text(
-                              user?.roleDisplayName ?? "Invitado",
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Hola, ${user?.name ?? "Usuario"}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    user?.roleDisplayName ?? "Invitado",
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 10),
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.notifications_outlined, color: Colors.white),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent.withOpacity(0.8),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.logout, color: Colors.white, size: 20),
-                            onPressed: () async {
-                              final authService = Provider.of<AuthService>(context, listen: false);
-                              await authService.logout();
-                              if (context.mounted) {
-                                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                              }
-                            },
-                          ),
+                        Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 20),
+                                onPressed: () => _showNotificationsBottomSheet(context, pendingTasks),
+                              ),
+                            ),
+                            if (pendingTasks.isNotEmpty)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${pendingTasks.length}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -173,7 +204,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, {VoidCallback? onSeeAll}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -185,10 +216,11 @@ class DashboardScreen extends StatelessWidget {
             color: AppColors.textDark,
           ),
         ),
-        TextButton(
-          onPressed: () {},
-          child: const Text('Ver todo'),
-        ),
+        if (onSeeAll != null)
+          TextButton(
+            onPressed: onSeeAll,
+            child: const Text('Ver todo'),
+          ),
       ],
     );
   }
@@ -579,27 +611,134 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNav() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+  Widget _buildDrawer(BuildContext context, AppUser? user) {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(
+              color: AppColors.primaryGreen,
+              image: DecorationImage(
+                image: AssetImage('assets/dashboard_bg.png'),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(Colors.black38, BlendMode.darken),
+              ),
+            ),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, size: 40, color: AppColors.primaryGreen),
+            ),
+            accountName: Text(user?.name ?? 'Usuario', style: const TextStyle(fontWeight: FontWeight.bold)),
+            accountEmail: Text(user?.roleDisplayName ?? 'Rol no definido'),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.home, color: AppColors.primaryGreen),
+                  title: const Text('Inicio'),
+                  onTap: () => Navigator.pop(context),
+                ),
+                if (user?.canAdminUsers ?? false)
+                  ListTile(
+                    leading: const Icon(Icons.people, color: Colors.grey),
+                    title: const Text('Gestión de Usuarios'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const UserManagementScreen()));
+                    },
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+              onTap: () async {
+                final authService = Provider.of<AuthService>(context, listen: false);
+                await authService.logout();
+                if (context.mounted) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                }
+              },
+            ),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: const [
-          Icon(Icons.home, color: AppColors.primaryGreen, size: 28),
-          Icon(Icons.bar_chart, color: Colors.grey, size: 28),
-          Icon(Icons.calendar_month, color: Colors.grey, size: 28),
-          Icon(Icons.settings, color: Colors.grey, size: 28),
-        ],
-      ),
+    );
+  }
+
+  void _showNotificationsBottomSheet(BuildContext context, List<FieldWork> tasks) {
+    final landService = Provider.of<LandService>(context, listen: false);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) {
+        if (tasks.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(30),
+            child: Text('No tienes tareas pendientes.', style: TextStyle(fontSize: 16)),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Tareas Asignadas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    final potrero = landService.potreros.firstWhere((p) => p.id == task.potreroId, orElse: () => Potrero(id: '', name: 'Potrero Borrado', areaTareas: 0));
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      child: ListTile(
+                        leading: const CircleAvatar(backgroundColor: Colors.orangeAccent, child: Icon(Icons.assignment_late, color: Colors.white, size: 20)),
+                        title: Text('${task.type} en ${potrero.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Programada: ${DateFormat('dd/MM/yyyy').format(task.date)}\n${task.details ?? ''}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 28),
+                          onPressed: () async {
+                            final potrero = Provider.of<LandService>(context, listen: false).potreros.firstWhere((p) => p.id == task.potreroId, orElse: () => Potrero(id: '', name: 'Potrero Borrado', areaTareas: 0));
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Completar Tarea'),
+                                content: Text('¿Confirmas que completaste la labor de ${task.type} en el potrero ${potrero.name}?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCELAR')),
+                                  TextButton(
+                                    onPressed: () async {
+                                      Navigator.pop(ctx);
+                                      await Provider.of<LandService>(context, listen: false).updateFieldWork(task.id, {'status': 'Completada'});
+                                      if (context.mounted) Navigator.pop(context); // Close the sheet to refresh
+                                    },
+                                    child: const Text('SÍ, COMPLETADA', style: TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

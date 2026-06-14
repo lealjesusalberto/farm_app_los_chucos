@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' as flutter_secure_storage;
 import '../core/app_colors.dart';
 import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,9 +29,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? true;
+    
+    String savedEmail = '';
+    if (rememberMe) {
+      try {
+        const secureStorage = flutter_secure_storage.FlutterSecureStorage();
+        savedEmail = await secureStorage.read(key: 'remembered_email') ?? '';
+      } catch (e) {
+        debugPrint('Error reading secure storage: $e');
+      }
+    }
+    
     setState(() {
-      _emailController.text = prefs.getString('remembered_email') ?? '';
-      _rememberMe = prefs.getBool('remember_me') ?? true;
+      _emailController.text = savedEmail;
+      _rememberMe = rememberMe;
     });
   }
 
@@ -199,6 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     return;
                                   }
                                   try {
+                                    await FirebaseAuth.instance.setLanguageCode("es");
                                     await FirebaseAuth.instance.sendPasswordResetEmail(
                                       email: _emailController.text.trim(),
                                     );

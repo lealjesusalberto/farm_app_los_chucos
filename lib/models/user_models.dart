@@ -61,20 +61,23 @@ class AppUser {
   // Permisos detallados
   bool get canManageFinance => role == UserRole.presidente || role == UserRole.administradora;
   
-  bool get canManageGenetics => role == UserRole.presidente;
+  bool get canManageGenetics => role == UserRole.presidente || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
   
   bool get canManageInventory => role == UserRole.presidente || role == UserRole.administradora;
 
-  bool get canManageAnimalInventory => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones;
+  bool get canManageAnimalInventory => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
   
-  bool get canRegisterProduction => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.operadorOrdeno;
+  bool get canRegisterProduction => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.operadorOrdeno || role == UserRole.gerenteOperaciones;
   
-  bool get canRegisterSanity => role == UserRole.presidente || role == UserRole.veterinario;
+  bool get canRegisterSanity => role == UserRole.presidente || role == UserRole.veterinario || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
   
-  bool get canManageLand => role == UserRole.presidente || role == UserRole.desmatonador || role == UserRole.fumigador;
+  bool get canManageLand => role == UserRole.presidente || role == UserRole.desmatonador || role == UserRole.fumigador || role == UserRole.gerenteOperaciones;
   
   bool get canAdminUsers => role == UserRole.presidente;
   
   // Accesos generales a los módulos contenedores
   bool get canAccessAnimalModule => canManageAnimalInventory || canManageGenetics || canRegisterProduction || canRegisterSanity;
+
+  // Solo el presidente puede actualizar o eliminar registros en módulos principales
+  bool get canUpdateOrDeleteRecords => role == UserRole.presidente;
 }

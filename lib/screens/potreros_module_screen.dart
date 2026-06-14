@@ -6,6 +6,7 @@ import '../core/app_colors.dart';
 import '../models/land_models.dart';
 import '../services/land_service.dart';
 import '../services/auth_service.dart';
+import '../models/user_models.dart';
 import 'add_field_work_screen.dart';
 import 'cattle_rotation_screen.dart';
 
@@ -67,17 +68,17 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
                         ],
                       ),
                       const SizedBox(height: 15),
-                      _buildPotrerosList(potreros),
+                      _buildPotrerosList(potreros, currentUser),
                       if (pendingTasks.isNotEmpty) ...[
                         const SizedBox(height: 30),
                         const Text('Mis Tareas Pendientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
                         const SizedBox(height: 15),
-                        _buildFieldWorkList(pendingTasks, isPending: true),
+                        _buildFieldWorkList(context, pendingTasks, isPending: true),
                       ],
                       const SizedBox(height: 30),
                       const Text('Últimas Labores Completadas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                       const SizedBox(height: 15),
-                      _buildFieldWorkList(completedHistory, isPending: false),
+                      _buildFieldWorkList(context, completedHistory, isPending: false),
                     ],
                   ),
                 ),
@@ -88,7 +89,7 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddFieldWorkScreen())),
             backgroundColor: AppColors.primaryGreen,
             icon: const Icon(Icons.cleaning_services, color: Colors.white),
-            label: const Text('REGISTRAR LABOR', style: TextStyle(color: Colors.white)),
+            label: const Text('Registrar Labor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         );
       },
@@ -179,7 +180,7 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
     );
   }
 
-  Widget _buildPotrerosList(List<Potrero> potreros) {
+  Widget _buildPotrerosList(List<Potrero> potreros, AppUser? currentUser) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -219,6 +220,10 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
                         '${potrero.areaTareas} Tareas ≈ ${potrero.areaHectares.toStringAsFixed(2)} Ha',
                         style: const TextStyle(color: Colors.grey, fontSize: 13),
                       ),
+                      Text(
+                        'Uso: ${potrero.purpose}',
+                        style: const TextStyle(color: Colors.indigo, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
                       if (potrero.currentCattleLot.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
@@ -233,20 +238,53 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      potrero.status,
-                      style: TextStyle(
-                        color: potrero.status == 'Disponible' ? Colors.green : Colors.orange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        potrero.status,
+                        style: TextStyle(
+                          color: potrero.status == 'Disponible' ? Colors.green : Colors.orange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
                       ),
-                    ),
-                    const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                  ],
-                ),
+                      if (currentUser?.canUpdateOrDeleteRecords == true)
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
+                          padding: EdgeInsets.zero,
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _showAddPotreroDialog(context, potrero: potrero);
+                            } else if (value == 'delete') {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Eliminar Potrero'),
+                                  content: Text('¿Seguro que deseas eliminar el potrero ${potrero.name}? Esta acción no se puede deshacer.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+                                    TextButton(
+                                      onPressed: () {
+                                        Provider.of<LandService>(context, listen: false).deletePotrero(potrero.id);
+                                        Navigator.pop(ctx);
+                                      },
+                                      child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                            const PopupMenuItem(value: 'delete', child: Text('Eliminar', style: TextStyle(color: Colors.red))),
+                          ],
+                        )
+                      else
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -255,10 +293,11 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
     );
   }
 
-  Widget _buildFieldWorkList(List<FieldWork> works, {bool isPending = false}) {
+  Widget _buildFieldWorkList(BuildContext context, List<FieldWork> works, {bool isPending = false}) {
     if (works.isEmpty) {
       return Center(child: Text(isPending ? 'No tienes tareas pendientes' : 'No hay labores registradas', style: const TextStyle(color: Colors.grey)));
     }
+    final landService = Provider.of<LandService>(context, listen: false);
     return Column(
       children: works.map((work) {
         IconData icon;
@@ -268,6 +307,8 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
           case 'Arreglo de Cerca': icon = Icons.fence; break;
           default: icon = Icons.cleaning_services;
         }
+        
+        final potrero = landService.potreros.firstWhere((p) => p.id == work.potreroId, orElse: () => Potrero(id: '', name: 'Potrero Borrado', areaTareas: 0));
         
         return InkWell(
           onTap: isPending ? () => _showCompleteTaskDialog(context, work) : null,
@@ -279,7 +320,7 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
             ),
             child: ListTile(
               leading: Icon(icon, color: isPending ? Colors.orange : AppColors.primaryGreen),
-              title: Text('${work.type} en Potrero #${work.potreroId}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isPending ? Colors.orange.shade800 : null)),
+              title: Text('${work.type} en ${potrero.name}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isPending ? Colors.orange.shade800 : null)),
               subtitle: Text('Resp: ${work.responsible}', style: const TextStyle(fontSize: 12)),
               trailing: isPending 
                 ? const Icon(Icons.check_circle_outline, color: Colors.orange)
@@ -340,18 +381,20 @@ class _PotrerosModuleScreenState extends State<PotrerosModuleScreen> {
     );
   }
 
-  void _showAddPotreroDialog(BuildContext context) {
+  void _showAddPotreroDialog(BuildContext context, {Potrero? potrero}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => const PotreroEntryForm(),
+      builder: (context) => PotreroEntryForm(potrero: potrero),
     );
   }
 }
 
 class PotreroEntryForm extends StatefulWidget {
-  const PotreroEntryForm({super.key});
+  final Potrero? potrero;
+
+  const PotreroEntryForm({super.key, this.potrero});
 
   @override
   State<PotreroEntryForm> createState() => _PotreroEntryFormState();
@@ -360,11 +403,28 @@ class PotreroEntryForm extends StatefulWidget {
 class _PotreroEntryFormState extends State<PotreroEntryForm> {
   final _nameController = TextEditingController();
   final _areaController = TextEditingController();
+  String _purpose = 'Pastoreo General';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.potrero != null) {
+      _nameController.text = widget.potrero!.name;
+      _areaController.text = widget.potrero!.areaTareas.toString();
+      _purpose = widget.potrero!.purpose;
+      
+      // Asegurarse de que el propósito sea válido
+      const validPurposes = ['Pastoreo General', 'Maternidad', 'Destete', 'Engorde', 'Pasto de Corte', 'Otro'];
+      if (!validPurposes.contains(_purpose)) {
+        _purpose = 'Otro';
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 20, left: 20, right: 20, top: 20),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -384,6 +444,21 @@ class _PotreroEntryFormState extends State<PotreroEntryForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Tamaño en Tareas (Ej: 50)'),
             ),
+            const SizedBox(height: 15),
+
+            DropdownButtonFormField<String>(
+              value: _purpose,
+              items: const [
+                DropdownMenuItem(value: 'Pastoreo General', child: Text('Pastoreo General')),
+                DropdownMenuItem(value: 'Maternidad', child: Text('Maternidad')),
+                DropdownMenuItem(value: 'Destete', child: Text('Destete')),
+                DropdownMenuItem(value: 'Engorde', child: Text('Engorde')),
+                DropdownMenuItem(value: 'Pasto de Corte', child: Text('Pasto de Corte')),
+                DropdownMenuItem(value: 'Otro', child: Text('Otro')),
+              ],
+              onChanged: (val) => setState(() => _purpose = val!),
+              decoration: const InputDecoration(labelText: 'Utilidad del Potrero'),
+            ),
             const SizedBox(height: 20),
 
             ElevatedButton(
@@ -400,13 +475,23 @@ class _PotreroEntryFormState extends State<PotreroEntryForm> {
                 }
 
                 final landService = Provider.of<LandService>(context, listen: false);
-                await landService.addPotrero(
-                  Potrero(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: _nameController.text.trim(),
-                    areaTareas: area,
-                  )
-                );
+                
+                if (widget.potrero != null) {
+                  await landService.updatePotrero(widget.potrero!.id, {
+                    'name': _nameController.text.trim(),
+                    'areaTareas': area,
+                    'purpose': _purpose,
+                  });
+                } else {
+                  await landService.addPotrero(
+                    Potrero(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      name: _nameController.text.trim(),
+                      areaTareas: area,
+                      purpose: _purpose,
+                    )
+                  );
+                }
                 
                 if (mounted) Navigator.pop(context);
               },

@@ -10,6 +10,8 @@ import 'deaths_module_screen.dart';
 import 'potreros_module_screen.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/animal_service.dart';
+import '../models/animal_models.dart';
 
 class AnimalProductionScreen extends StatelessWidget {
   const AnimalProductionScreen({super.key});
@@ -26,7 +28,7 @@ class AnimalProductionScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FadeInDown(child: _buildMainStats()),
+                  FadeInDown(child: _buildMainStats(context)),
                   const SizedBox(height: 30),
                   const Text(
                     'Gestión Operativa',
@@ -103,7 +105,22 @@ class AnimalProductionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMainStats() {
+  Widget _buildMainStats(BuildContext context) {
+    final animalService = Provider.of<AnimalService>(context);
+    
+    final totalAnimals = animalService.animals.length;
+    
+    // Próximos partos: Registros de preñez confirmados
+    final proximosPartos = animalService.reproductionRecords
+        .where((r) => r.isPregnant == true && r.type == ReproductionRecordType.pregnancy)
+        .length;
+
+    // En tratamiento: Registros de tratamiento en los últimos 30 días
+    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+    final enTratamiento = animalService.healthRecords
+        .where((r) => r.type == HealthRecordType.treatment && r.date.isAfter(thirtyDaysAgo))
+        .length;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -115,13 +132,13 @@ class AnimalProductionScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildSummaryItem('Total Animales', '584', FontAwesomeIcons.tags),
+          _buildSummaryItem('Total Animales', totalAnimals.toString(), FontAwesomeIcons.tags),
           _buildSummaryItem(
             'Próximos Partos',
-            '12',
+            proximosPartos.toString(),
             FontAwesomeIcons.babyCarriage,
           ),
-          _buildSummaryItem('En Tratamiento', '5', Icons.medication),
+          _buildSummaryItem('En Tratamiento', enTratamiento.toString(), Icons.medication),
         ],
       ),
     );

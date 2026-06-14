@@ -81,13 +81,14 @@ class _AnimalListScreenState extends State<AnimalListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddAnimalScreen()),
         ),
         backgroundColor: AppColors.primaryGreen,
-        child: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Registrar Animal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
