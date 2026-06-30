@@ -98,23 +98,48 @@ class _ProductionModuleScreenState extends State<ProductionModuleScreen> with Si
               const SizedBox(height: 10),
               Consumer<AnimalService>(
                 builder: (context, service, _) {
-                  // Calcular resumen mensual simple
-                  final thisMonth = DateTime.now().month;
-                  final thisYear = DateTime.now().year;
+                  final now = DateTime.now();
+                  
+                  // Calcular resumen mensual (Últimos 30 días)
+                  final last30Days = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 29));
                   
                   final milkThisMonth = service.milkRecords
-                    .where((r) => r.date.month == thisMonth && r.date.year == thisYear)
+                    .where((r) => !r.date.isBefore(last30Days))
                     .fold(0.0, (sum, r) => sum + r.totalLiters);
 
                   final individualMilkThisMonth = service.individualMilkRecords
-                    .where((r) => r.date.month == thisMonth && r.date.year == thisYear)
+                    .where((r) => !r.date.isBefore(last30Days))
                     .fold(0.0, (sum, r) => sum + r.liters);
                     
-                  return Column(
+                  // Calcular resumen semanal (Últimos 7 días)
+                  final last7Days = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+                  
+                  final milkThisWeek = service.milkRecords
+                    .where((r) => !r.date.isBefore(last7Days))
+                    .fold(0.0, (sum, r) => sum + r.totalLiters);
+                    
+                  final individualMilkThisWeek = service.individualMilkRecords
+                    .where((r) => !r.date.isBefore(last7Days))
+                    .fold(0.0, (sum, r) => sum + r.liters);
+                    
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      const Text('Leche Producida este Mes', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                      Text('${(milkThisMonth + individualMilkThisMonth).toStringAsFixed(1)} Lts', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      Text('Global: ${milkThisMonth.toStringAsFixed(1)} | Individual: ${individualMilkThisMonth.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                      Column(
+                        children: [
+                          const Text('Últimos 7 Días', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text('${(milkThisWeek + individualMilkThisWeek).toStringAsFixed(1)} Lts', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                          Text('G: ${milkThisWeek.toStringAsFixed(1)} | I: ${individualMilkThisWeek.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                        ],
+                      ),
+                      Container(width: 1, height: 40, color: Colors.white24),
+                      Column(
+                        children: [
+                          const Text('Últimos 30 Días', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text('${(milkThisMonth + individualMilkThisMonth).toStringAsFixed(1)} Lts', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                          Text('G: ${milkThisMonth.toStringAsFixed(1)} | I: ${individualMilkThisMonth.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                        ],
+                      ),
                     ],
                   );
                 }
@@ -378,7 +403,7 @@ class _IndividualMilkTabState extends State<_IndividualMilkTab> {
         final allAnimals = service.animals.toList();
         final records = service.individualMilkRecords;
         
-        final milkGroups = ['Vacas', 'Vacas en prod', 'Vacas secas', 'Búfalas', 'Búfalas en prod', 'Búfalas secas'];
+        final milkGroups = ['Vacas en prod', 'Búfalas en prod'];
         final milkProducers = allAnimals.where((a) => milkGroups.contains(a.group)).toList();
 
         // Build filtered animal list based on search AND filter
@@ -576,10 +601,16 @@ class _IndividualMilkTabState extends State<_IndividualMilkTab> {
     final totalLiters = animalRecords.fold(0.0, (sum, r) => sum + r.liters);
 
     // Monthly average
-    final thisMonth = DateTime.now().month;
-    final thisYear = DateTime.now().year;
+    final now = DateTime.now();
+    final thisMonth = now.month;
+    final thisYear = now.year;
     final monthRecords = animalRecords.where((r) => r.date.month == thisMonth && r.date.year == thisYear).toList();
     final monthLiters = monthRecords.fold(0.0, (sum, r) => sum + r.liters);
+
+    // Weekly average
+    final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final weekRecords = animalRecords.where((r) => !r.date.isBefore(startOfWeek)).toList();
+    final weekLiters = weekRecords.fold(0.0, (sum, r) => sum + r.liters);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -652,6 +683,7 @@ class _IndividualMilkTabState extends State<_IndividualMilkTab> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildMiniStat('Total', '${totalLiters.toStringAsFixed(1)} Lts', Icons.water_drop),
+              _buildMiniStat('Esta Sem', '${weekLiters.toStringAsFixed(1)} Lts', Icons.view_week),
               _buildMiniStat('Este Mes', '${monthLiters.toStringAsFixed(1)} Lts', Icons.calendar_month),
               _buildMiniStat('Registros', '${animalRecords.length}', Icons.list_alt),
             ],
@@ -902,7 +934,7 @@ class _IndividualMilkEntryFormState extends State<_IndividualMilkEntryForm> {
     final animalService = Provider.of<AnimalService>(context, listen: false);
     final animals = animalService.animals.toList();
 
-    final milkGroups = ['Vacas', 'Vacas en prod', 'Vacas secas', 'Búfalas', 'Búfalas en prod', 'Búfalas secas'];
+    final milkGroups = ['Vacas en prod', 'Búfalas en prod'];
     final milkProducers = animals.where((a) => milkGroups.contains(a.group)).toList();
 
     // Filter animals for dropdown
@@ -1285,16 +1317,23 @@ class _IndividualMeatTabState extends State<_IndividualMeatTab> {
   String? _selectedAnimalId;
   List<String> _selectedAgeGroups = [];
 
-  void _showFilterModal(BuildContext context, List<String> availableGroups) {
+  AnimalType? _filterModalType;
+
+  void _showFilterModal(BuildContext context, List<String> allMeatAgeGroups) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final availableGroups = _filterModalType != null 
+                ? _filterModalType!.ageGroups 
+                : allMeatAgeGroups;
+
             return Container(
               padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20 + MediaQuery.of(context).padding.bottom),
-              height: MediaQuery.of(context).size.height * 0.5,
+              height: MediaQuery.of(context).size.height * 0.6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1306,6 +1345,28 @@ class _IndividualMeatTabState extends State<_IndividualMeatTab> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  DropdownButtonFormField<AnimalType?>(
+                    decoration: const InputDecoration(labelText: '1. Seleccionar Especie', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
+                    value: _filterModalType,
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('Todas las especies')),
+                      DropdownMenuItem(value: AnimalType.bovine, child: Text('Bovino')),
+                      DropdownMenuItem(value: AnimalType.buffalo, child: Text('Búfalo')),
+                      DropdownMenuItem(value: AnimalType.porcine, child: Text('Porcino')),
+                    ],
+                    onChanged: (val) {
+                      setModalState(() {
+                        _filterModalType = val;
+                        if (val != null) {
+                           _selectedAgeGroups.removeWhere((g) => !val.ageGroups.contains(g));
+                        }
+                      });
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  const Text('2. Seleccionar Grupos', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: SingleChildScrollView(
                       child: Wrap(

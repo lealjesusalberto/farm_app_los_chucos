@@ -20,6 +20,7 @@
     "inventoryItems": { ".read": "auth != null", ".write": "auth != null" },
     "inventoryTransactions": { ".read": "auth != null", ".write": "auth != null" },
     "potreros": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'presidente')" },
-    "fieldWork": { ".read": "auth != null", ".write": "auth != null" }
+    "fieldWork": { ".read": "auth != null", ".write": "auth != null" },
+    "tasks": { ".read": "auth != null", ".write": "auth != null" }
   }
 }

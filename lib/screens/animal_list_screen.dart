@@ -17,7 +17,7 @@ class AnimalListScreen extends StatefulWidget {
 
 class _AnimalListScreenState extends State<AnimalListScreen> {
   String selectedFilter = 'Todos';
-  final List<String> filters = ['Todos', 'Bovinos', 'Búfalos', 'Equinos', 'Porcinos', 'Aves', 'Perros'];
+  final List<String> filters = ['Bovinos', 'Búfalos', 'Equinos', 'Porcinos', 'Aves', 'Perros', 'Todos'];
 
   @override
   Widget build(BuildContext context) {

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../models/animal_models.dart';
 import 'package:provider/provider.dart';
 import '../services/animal_service.dart';
+import '../services/land_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class AddAnimalScreen extends StatefulWidget {
@@ -42,7 +40,6 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
   String? _productiveStatus;
 
   final List<String> _sexes = ['Hembra', 'Macho'];
-  final List<String> _potreros = ['Potrero #1', 'Potrero #2', 'Potrero #3', 'Corral de Engorde'];
   List<String> get _groups => _selectedType.ageGroups;
 
   @override
@@ -63,9 +60,7 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
       _weight = a.currentWeight;
       _productiveStatus = a.productiveStatus;
       
-      if (_potreros.contains(a.currentLocation)) {
-        _potrero = a.currentLocation;
-      }
+      _potrero = a.currentLocation;
       
       if (_selectedType.ageGroups.contains(a.group)) {
         _selectedGroup = a.group;
@@ -133,7 +128,17 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
     if (showProductiveStatus && _productiveStatus == null) {
       // Necesitamos un post-frame callback para no mutar estado en build
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() => _productiveStatus = 'Seca');
+        if (mounted) setState(() => _productiveStatus = 'Seca');
+      });
+    }
+
+    final landService = Provider.of<LandService>(context);
+    final dynamicPotreros = landService.potreros.map((p) => p.name).toList();
+    if (dynamicPotreros.isEmpty) dynamicPotreros.add('Sin Potrero');
+
+    if (!dynamicPotreros.contains(_potrero)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _potrero = dynamicPotreros.first);
       });
     }
 
@@ -235,7 +240,7 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
                   title: 'Ubicación y Estado',
                   icon: Icons.location_on_outlined,
                   children: [
-                    _buildDropdownField(label: 'Ubicación Actual (Potrero)', value: _potrero, items: _potreros, onChanged: (val) => setState(() => _potrero = val!)),
+                    _buildDropdownField(label: 'Ubicación Actual (Potrero)', value: dynamicPotreros.contains(_potrero) ? _potrero : dynamicPotreros.first, items: dynamicPotreros, onChanged: (val) => setState(() => _potrero = val!)),
                     const SizedBox(height: 15),
                     _buildDropdownField(label: 'Grupo Etario', value: _selectedGroup, items: _groups, onChanged: (val) => setState(() => _selectedGroup = val!)),
                     const SizedBox(height: 15),

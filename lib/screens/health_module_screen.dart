@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../core/app_colors.dart';
 import '../models/animal_models.dart';
 import '../services/animal_service.dart';
+import '../services/auth_service.dart';
+import '../models/user_models.dart';
 import '../widgets/animal_selector.dart';
 
 class HealthModuleScreen extends StatelessWidget {
@@ -114,12 +116,12 @@ class HealthModuleScreen extends StatelessWidget {
     );
   }
 
-  void _showEntryDialog(BuildContext context, int tabIndex) {
+  void _showEntryDialog(BuildContext context, int tabIndex, {HealthRecord? initialRecord}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => HealthEntryForm(initialTabIndex: tabIndex),
+      builder: (context) => HealthEntryForm(initialTabIndex: tabIndex, initialRecord: initialRecord),
     );
   }
 }
@@ -135,17 +137,23 @@ class _VaccinesTabState extends State<VaccinesTab> {
   String _searchQuery = '';
   List<String> _selectedAgeGroups = [];
 
+  AnimalType? _filterModalType;
+
   void _showFilterModal(BuildContext context) {
-    final allAgeGroups = AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final availableGroups = _filterModalType != null 
+                ? _filterModalType!.ageGroups 
+                : AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
+
             return Container(
               padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20 + MediaQuery.of(context).padding.bottom),
-              height: MediaQuery.of(context).size.height * 0.5,
+              height: MediaQuery.of(context).size.height * 0.6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -157,12 +165,43 @@ class _VaccinesTabState extends State<VaccinesTab> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  DropdownButtonFormField<AnimalType?>(
+                    decoration: const InputDecoration(labelText: '1. Seleccionar Especie', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
+                    value: _filterModalType,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Todas las especies')),
+                      ...AnimalType.values.map((t) {
+                        String name = '';
+                        switch (t) {
+                          case AnimalType.bovine: name = 'Bovino'; break;
+                          case AnimalType.buffalo: name = 'Búfalo'; break;
+                          case AnimalType.equine: name = 'Equino'; break;
+                          case AnimalType.porcine: name = 'Porcino'; break;
+                          case AnimalType.poultry: name = 'Aves'; break;
+                          case AnimalType.dog: name = 'Perro'; break;
+                        }
+                        return DropdownMenuItem(value: t, child: Text(name));
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setModalState(() {
+                        _filterModalType = val;
+                        if (val != null) {
+                           _selectedAgeGroups.removeWhere((g) => !val.ageGroups.contains(g));
+                        }
+                      });
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  const Text('2. Seleccionar Grupos', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: SingleChildScrollView(
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: allAgeGroups.map((group) {
+                        children: availableGroups.map((group) {
                           final isSelected = _selectedAgeGroups.contains(group);
                           return FilterChip(
                             label: Text(group),
@@ -280,21 +319,60 @@ class _VaccinesTabState extends State<VaccinesTab> {
               ),
             ),
             Expanded(
-              child: records.isEmpty
-                  ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(15),
-                      itemCount: records.length,
-                      itemBuilder: (context, index) {
+              child: Consumer<AuthService>(
+                builder: (context, authService, _) {
+                  final isPresidente = authService.currentUser?.role == UserRole.presidente;
+                  
+                  return records.isEmpty
+                      ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
+                          itemCount: records.length,
+                          itemBuilder: (context, index) {
             final r = records[index];
             final dateStr = DateFormat('dd/MM/yyyy').format(r.date);
             
             String alert = r.type == HealthRecordType.treatment ? 'Sin fecha de fin' : 'Sin refuerzo programado';
+            String nextDoseInfo = '';
+            
+            if (r.type == HealthRecordType.treatment && r.frequency != null) {
+              int freqHours = 0;
+              if (r.frequency!.contains('8')) freqHours = 8;
+              else if (r.frequency!.contains('12')) freqHours = 12;
+              else if (r.frequency!.contains('24')) freqHours = 24;
+              else if (r.frequency!.contains('48')) freqHours = 48;
+              
+              if (freqHours > 0) {
+                final now = DateTime.now();
+                if (r.nextDueDate == null || now.isBefore(r.nextDueDate!)) {
+                  int elapsedHours = now.difference(r.date).inHours;
+                  if (elapsedHours < 0) elapsedHours = 0;
+                  int nextDoseMultiple = (elapsedHours ~/ freqHours) + 1;
+                  DateTime nextDoseDate = r.date.add(Duration(hours: nextDoseMultiple * freqHours));
+                  
+                  if (r.nextDueDate == null || nextDoseDate.isBefore(r.nextDueDate!)) {
+                    final hoursLeft = nextDoseDate.difference(now).inHours;
+                    final minsLeft = nextDoseDate.difference(now).inMinutes % 60;
+                    if (hoursLeft == 0 && minsLeft <= 0) {
+                      nextDoseInfo = 'Dosis AHORA';
+                    } else if (hoursLeft == 0) {
+                      nextDoseInfo = 'Próxima dosis en $minsLeft min';
+                    } else {
+                      nextDoseInfo = 'Próxima dosis en $hoursLeft h ${minsLeft}m';
+                    }
+                  } else {
+                    nextDoseInfo = 'Última dosis administrada';
+                  }
+                }
+              }
+            }
+
             if (r.nextDueDate != null) {
               final daysLeft = r.nextDueDate!.difference(DateTime.now()).inDays;
               if (r.type == HealthRecordType.treatment) {
                 if (daysLeft < 0) {
                   alert = 'Finalizado hace ${daysLeft.abs()} días';
+                  nextDoseInfo = ''; // Ya finalizó
                 } else if (daysLeft == 0) {
                   alert = 'Finaliza HOY';
                 } else {
@@ -308,6 +386,14 @@ class _VaccinesTabState extends State<VaccinesTab> {
                 } else {
                   alert = 'Próximo refuerzo en $daysLeft días';
                 }
+              }
+            }
+
+            if (nextDoseInfo.isNotEmpty) {
+              if (alert == 'Sin fecha de fin') {
+                alert = nextDoseInfo;
+              } else {
+                alert = '$alert • $nextDoseInfo';
               }
             }
 
@@ -328,33 +414,67 @@ class _VaccinesTabState extends State<VaccinesTab> {
 
             return FadeInUp(
               child: _buildHealthCard(
-                r.name,
+                r,
                 targetLabel,
-                dateStr,
                 alert,
                 r.type == HealthRecordType.vaccine ? Icons.vaccines : Icons.medical_services,
                 r.type == HealthRecordType.vaccine ? Colors.blue : Colors.orange,
+                isPresidente,
+                context,
+                service,
               ),
             );
           },
-        ),
-      ),
+        );
+      },
+    ),
+  ),
     ],
   );
 },
     );
   }
 
-  Widget _buildHealthCard(String title, String herd, String date, String alert, IconData icon, Color color) {
+  Widget _buildHealthCard(HealthRecord record, String herd, String alert, IconData icon, Color color, bool isPresidente, BuildContext context, AnimalService service) {
+    final dateStr = DateFormat('dd/MM/yyyy').format(record.date);
+    final authService = Provider.of<AuthService>(context, listen: false);
+    String assignedName = 'No asignado';
+    if (record.assignedTo != null) {
+      final user = authService.allUsers.cast<AppUser?>().firstWhere((u) => u?.id == record.assignedTo, orElse: () => null);
+      assignedName = user?.name ?? 'Desconocido';
+    }
+    bool isTreatment = record.type == HealthRecordType.treatment;
+    bool isFinished = isTreatment && (alert.contains('Finalizad') || alert == 'Última dosis administrada');
+    bool isActive = isTreatment && !isFinished;
+
+    BoxDecoration? cardDecoration;
+    if (isTreatment) {
+      if (isActive) {
+        cardDecoration = BoxDecoration(
+          gradient: LinearGradient(colors: [Colors.blue.shade50.withOpacity(0.5), Colors.white], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        );
+      } else {
+        cardDecoration = BoxDecoration(
+          gradient: LinearGradient(colors: [Colors.red.shade50.withOpacity(0.5), Colors.white], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        );
+      }
+    } else {
+      cardDecoration = const BoxDecoration(color: Colors.white);
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      elevation: 1,
+      child: Container(
+        decoration: cardDecoration,
         padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
@@ -366,30 +486,142 @@ class _VaccinesTabState extends State<VaccinesTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(record.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                          if (isTreatment)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isActive ? Colors.blue.shade100 : Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                isActive ? 'En proceso' : 'Finalizado',
+                                style: TextStyle(
+                                  color: isActive ? Colors.blue.shade800 : Colors.red.shade800,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
                       Text(herd, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      Text('Aplicado: $dateStr', style: const TextStyle(color: Colors.indigo, fontSize: 12)),
+                      if (record.animalType != null)
+                        _buildInfoRow('Especie:', _translateAnimalType(record.animalType!)),
+                      if (record.frequency != null)
+                        _buildInfoRow('Frecuencia:', record.frequency!),
+                      if (record.assignedTo != null)
+                        _buildInfoRow('Personal:', assignedName),
+                      if (record.notes != null && record.notes!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.grey.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
+                          child: Text('Obs: ${record.notes}', style: const TextStyle(color: Colors.black87, fontSize: 12, fontStyle: FontStyle.italic)),
+                        ),
+                      ]
                     ],
                   ),
                 ),
-                Text(date, style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
             const Divider(height: 25),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Icon(Icons.info_outline, size: 16, color: alert.contains('Vencido') ? Colors.red : Colors.orange),
-                const SizedBox(width: 8),
-                Text(alert, style: TextStyle(
-                  color: alert.contains('Vencido') ? Colors.red : Colors.orange, 
-                  fontSize: 12, 
-                  fontWeight: FontWeight.w600
-                )),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: alert.contains('Vencido') ? Colors.red : Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(alert, style: TextStyle(
+                          color: alert.contains('Vencido') ? Colors.red : Colors.orange, 
+                          fontSize: 12, 
+                          fontWeight: FontWeight.w600
+                        )),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isPresidente)
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                            builder: (_) => HealthEntryForm(initialTabIndex: 0, initialRecord: record),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Eliminar Registro'),
+                              content: const Text('¿Estás seguro de que deseas eliminar este registro de salud?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar', style: TextStyle(color: Colors.red))),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await service.deleteHealthRecord(record.id);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value, style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+  }
+
+  String _translateAnimalType(String type) {
+    switch (type.toLowerCase()) {
+      case 'bovine': return 'Bovino';
+      case 'buffalo': return 'Búfalo';
+      case 'equine': return 'Equino';
+      case 'porcine': return 'Porcino';
+      case 'poultry': return 'Ave';
+      case 'dog': return 'Perro';
+      default: return type;
+    }
   }
 }
 
@@ -404,17 +636,23 @@ class _BathsTabState extends State<BathsTab> {
   String _searchQuery = '';
   List<String> _selectedAgeGroups = [];
 
+  AnimalType? _filterModalType;
+
   void _showFilterModal(BuildContext context) {
-    final allAgeGroups = AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final availableGroups = _filterModalType != null 
+                ? _filterModalType!.ageGroups 
+                : AnimalType.values.expand((t) => t.ageGroups).toSet().toList()..sort();
+
             return Container(
               padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20 + MediaQuery.of(context).padding.bottom),
-              height: MediaQuery.of(context).size.height * 0.5,
+              height: MediaQuery.of(context).size.height * 0.6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -426,12 +664,43 @@ class _BathsTabState extends State<BathsTab> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  DropdownButtonFormField<AnimalType?>(
+                    decoration: const InputDecoration(labelText: '1. Seleccionar Especie', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0)),
+                    value: _filterModalType,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Todas las especies')),
+                      ...AnimalType.values.map((t) {
+                        String name = '';
+                        switch (t) {
+                          case AnimalType.bovine: name = 'Bovino'; break;
+                          case AnimalType.buffalo: name = 'Búfalo'; break;
+                          case AnimalType.equine: name = 'Equino'; break;
+                          case AnimalType.porcine: name = 'Porcino'; break;
+                          case AnimalType.poultry: name = 'Aves'; break;
+                          case AnimalType.dog: name = 'Perro'; break;
+                        }
+                        return DropdownMenuItem(value: t, child: Text(name));
+                      }),
+                    ],
+                    onChanged: (val) {
+                      setModalState(() {
+                        _filterModalType = val;
+                        if (val != null) {
+                           _selectedAgeGroups.removeWhere((g) => !val.ageGroups.contains(g));
+                        }
+                      });
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  const Text('2. Seleccionar Grupos', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: SingleChildScrollView(
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: allAgeGroups.map((group) {
+                        children: availableGroups.map((group) {
                           final isSelected = _selectedAgeGroups.contains(group);
                           return FilterChip(
                             label: Text(group),
@@ -547,12 +816,16 @@ class _BathsTabState extends State<BathsTab> {
               ),
             ),
             Expanded(
-              child: records.isEmpty
-                  ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(15),
-                      itemCount: records.length,
-                      itemBuilder: (context, index) {
+              child: Consumer<AuthService>(
+                builder: (context, authService, _) {
+                  final isPresidente = authService.currentUser?.role == UserRole.presidente;
+                  
+                  return records.isEmpty
+                      ? const Center(child: Text('No hay registros que coincidan', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
+                          itemCount: records.length,
+                          itemBuilder: (context, index) {
             final r = records[index];
             final nextStr = r.nextDueDate != null ? DateFormat('dd/MM/yyyy').format(r.nextDueDate!) : 'No programado';
             
@@ -588,25 +861,37 @@ class _BathsTabState extends State<BathsTab> {
 
             return FadeInUp(
               child: _buildBathCard(
-                r.name,
+                r,
                 targetLabel,
                 'Próximo: $nextStr',
                 countdown,
                 FontAwesomeIcons.shower,
                 Colors.teal,
                 countdownColor,
+                isPresidente,
+                context,
+                service,
               ),
             );
           },
-        ),
-      ),
+        );
+      },
+    ),
+  ),
     ],
   );
 },
     );
   }
 
-  Widget _buildBathCard(String title, String lot, String nextDate, String countdown, IconData icon, Color color, Color countColor) {
+  Widget _buildBathCard(HealthRecord record, String lot, String nextDate, String countdown, IconData icon, Color color, Color countColor, bool isPresidente, BuildContext context, AnimalService service) {
+    final appliedDate = DateFormat('dd/MM/yyyy').format(record.date);
+    final authService = Provider.of<AuthService>(context, listen: false);
+    String assignedName = 'No asignado';
+    if (record.assignedTo != null) {
+      final user = authService.allUsers.cast<AppUser?>().firstWhere((u) => u?.id == record.assignedTo, orElse: () => null);
+      assignedName = user?.name ?? 'Desconocido';
+    }
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(15),
@@ -616,6 +901,7 @@ class _BathsTabState extends State<BathsTab> {
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(12),
@@ -627,19 +913,80 @@ class _BathsTabState extends State<BathsTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(record.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                const SizedBox(height: 4),
                 Text(lot, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 5),
+                const SizedBox(height: 4),
+                Text('Aplicado: $appliedDate', style: const TextStyle(color: Colors.indigo, fontSize: 12)),
+                const SizedBox(height: 4),
                 Text(nextDate, style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.w600, fontSize: 12)),
+                if (record.assignedTo != null) ...[
+                  const SizedBox(height: 4),
+                  Text('Personal: $assignedName', style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                ],
+                if (record.notes != null && record.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.grey.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
+                    child: Text('Obs: ${record.notes}', style: const TextStyle(color: Colors.black87, fontSize: 12, fontStyle: FontStyle.italic)),
+                  ),
+                ],
               ],
             ),
           ),
-          if (countdown != '-')
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: countColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Text(countdown, style: TextStyle(color: countColor, fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (countdown != '-')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: countColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  child: Text(countdown, style: TextStyle(color: countColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              if (isPresidente)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                          builder: (_) => HealthEntryForm(initialTabIndex: 1, initialRecord: record),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Eliminar Registro'),
+                            content: const Text('¿Estás seguro de que deseas eliminar este registro de baño?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar', style: TextStyle(color: Colors.red))),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await service.deleteHealthRecord(record.id);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -648,7 +995,8 @@ class _BathsTabState extends State<BathsTab> {
 
 class HealthEntryForm extends StatefulWidget {
   final int initialTabIndex;
-  const HealthEntryForm({super.key, this.initialTabIndex = 0});
+  final HealthRecord? initialRecord;
+  const HealthEntryForm({super.key, this.initialTabIndex = 0, this.initialRecord});
 
   @override
   State<HealthEntryForm> createState() => _HealthEntryFormState();
@@ -662,20 +1010,54 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
   String? _selectedAnimalId;
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
+  final _customFrequencyController = TextEditingController();
   
   DateTime _startDate = DateTime.now();
   bool _scheduleNext = false;
   DateTime _nextDueDate = DateTime.now().add(const Duration(days: 30));
+  String? _treatmentFrequency;
+  String? _assignedTo;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialTabIndex == 1) {
-      _selectedType = HealthRecordType.bath;
+    if (widget.initialRecord != null) {
+      final r = widget.initialRecord!;
+      _selectedType = r.type;
+      _selectedAnimalType = AnimalType.values.firstWhere((e) => e.name == r.animalType, orElse: () => AnimalType.bovine);
+      _isIndividual = r.animalId != null;
+      _selectedAnimalId = r.animalId;
+      if (!_isIndividual) {
+         _selectedGroup = r.herd;
+      }
+      _nameController.text = r.name;
+      _notesController.text = r.notes ?? '';
+      _startDate = r.date;
+      _scheduleNext = r.nextDueDate != null;
+      if (_scheduleNext) {
+         _nextDueDate = r.nextDueDate!;
+      }
+      
+      final standardFrequencies = ['Cada 8 horas', 'Cada 12 horas', 'Cada 24 horas', 'Cada 48 horas'];
+      if (r.frequency != null && !standardFrequencies.contains(r.frequency)) {
+        _treatmentFrequency = 'Otra (especificar)';
+        _customFrequencyController.text = r.frequency!;
+      } else {
+        _treatmentFrequency = r.frequency;
+      }
+      _assignedTo = r.assignedTo;
     } else {
-      _selectedType = HealthRecordType.vaccine;
+      if (widget.initialTabIndex == 1) {
+        _selectedType = HealthRecordType.bath;
+      } else {
+        _selectedType = HealthRecordType.vaccine;
+      }
     }
-    _selectedGroup = _selectedAnimalType.ageGroups.first;
+    
+    // Si no es un registro individual y el grupo seleccionado es nulo, asignamos el primero
+    if (!_isIndividual && _selectedGroup == null) {
+      _selectedGroup = _selectedAnimalType.ageGroups.first;
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -709,6 +1091,7 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
   @override
   Widget build(BuildContext context) {
     final animalService = Provider.of<AnimalService>(context, listen: false);
+    final authService = Provider.of<AuthService>(context, listen: false);
     
     // Filter animals by type
     final filteredAnimals = animalService.animals.where((a) => a.type == _selectedAnimalType).toList();
@@ -839,6 +1222,30 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
               onTap: () => _selectStartDate(context),
             ),
 
+            if (_selectedType == HealthRecordType.treatment) ...[
+              const SizedBox(height: 15),
+              DropdownButtonFormField<String>(
+                value: _treatmentFrequency,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('No aplica / Única dosis')),
+                  DropdownMenuItem(value: 'Cada 8 horas', child: Text('Cada 8 horas')),
+                  DropdownMenuItem(value: 'Cada 12 horas', child: Text('Cada 12 horas')),
+                  DropdownMenuItem(value: 'Cada 24 horas', child: Text('Cada 24 horas (Diario)')),
+                  DropdownMenuItem(value: 'Cada 48 horas', child: Text('Cada 48 horas')),
+                  DropdownMenuItem(value: 'Otra (especificar)', child: Text('Otra (especificar)')),
+                ],
+                onChanged: (val) => setState(() => _treatmentFrequency = val),
+                decoration: const InputDecoration(labelText: 'Frecuencia / Alerta de Dosis'),
+              ),
+              if (_treatmentFrequency == 'Otra (especificar)') ...[
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _customFrequencyController,
+                  decoration: const InputDecoration(labelText: 'Especificar Frecuencia (Ej: Cada 3 días)'),
+                ),
+              ],
+            ],
+
             SwitchListTile(
               title: Text(_selectedType == HealthRecordType.treatment ? '¿Definir Fecha de Fin de Tratamiento?' : '¿Programar Próxima Dosis/Baño?'),
               value: _scheduleNext,
@@ -856,6 +1263,16 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
                 onTap: () => _selectDate(context),
               ),
 
+            const SizedBox(height: 15),
+            DropdownButtonFormField<String>(
+              value: _assignedTo,
+              items: [
+                const DropdownMenuItem(value: null, child: Text('No asignado')),
+                ...authService.allUsers.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))),
+              ],
+              onChanged: (val) => setState(() => _assignedTo = val),
+              decoration: const InputDecoration(labelText: 'Personal a cargo de la aplicación'),
+            ),
             const SizedBox(height: 15),
             TextField(
               controller: _notesController,
@@ -879,19 +1296,27 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
                     ? (filteredAnimals.firstWhere((a) => a.id == _selectedAnimalId).code)
                     : _selectedGroup!;
 
-                animalService.addHealthRecord(
-                  HealthRecord(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    herd: targetHerd,
-                    type: _selectedType,
-                    name: _nameController.text.trim(),
-                    date: _startDate,
-                    nextDueDate: _scheduleNext ? _nextDueDate : null,
-                    notes: _notesController.text,
-                    animalId: _isIndividual ? _selectedAnimalId : null,
-                    animalType: _selectedAnimalType.name,
-                  ),
+                final newRecord = HealthRecord(
+                  id: widget.initialRecord?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                  herd: targetHerd,
+                  type: _selectedType,
+                  name: _nameController.text.trim(),
+                  date: _startDate,
+                  nextDueDate: _scheduleNext ? _nextDueDate : null,
+                  notes: _notesController.text,
+                  animalId: _isIndividual ? _selectedAnimalId : null,
+                  animalType: _selectedAnimalType.name,
+                  frequency: _selectedType == HealthRecordType.treatment 
+                    ? (_treatmentFrequency == 'Otra (especificar)' ? _customFrequencyController.text.trim() : _treatmentFrequency) 
+                    : null,
+                  assignedTo: _assignedTo,
                 );
+
+                if (widget.initialRecord != null) {
+                  animalService.updateHealthRecord(widget.initialRecord!.id, newRecord.toMap());
+                } else {
+                  animalService.addHealthRecord(newRecord);
+                }
                 Navigator.pop(context); // Cierra el BottomSheet
               },
               style: ElevatedButton.styleFrom(

@@ -61,22 +61,36 @@ class AppUser {
   // Permisos detallados
   bool get canManageFinance => role == UserRole.presidente || role == UserRole.administradora;
   
-  bool get canManageGenetics => role == UserRole.presidente || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+  bool get canManageGenetics => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
   
-  bool get canManageInventory => role == UserRole.presidente || role == UserRole.administradora;
+  bool get canManageInventory => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.veterinario;
 
-  bool get canManageAnimalInventory => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+  bool get canManageAnimalInventory => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.veterinario;
   
   bool get canRegisterProduction => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.operadorOrdeno || role == UserRole.gerenteOperaciones;
   
-  bool get canRegisterSanity => role == UserRole.presidente || role == UserRole.veterinario || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+  bool get canRegisterSanity => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.veterinario || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
   
-  bool get canManageLand => role == UserRole.presidente || role == UserRole.desmatonador || role == UserRole.fumigador || role == UserRole.gerenteOperaciones;
+  bool get canManageLand => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.desmatonador || role == UserRole.fumigador;
   
   bool get canAdminUsers => role == UserRole.presidente;
+
+  bool get canManageTasks => role == UserRole.presidente || role == UserRole.administradora;
   
   // Accesos generales a los módulos contenedores
-  bool get canAccessAnimalModule => canManageAnimalInventory || canManageGenetics || canRegisterProduction || canRegisterSanity;
+  bool get canAccessAnimalModule => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.veterinario;
+
+  bool get canAccessPotrerosModule => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.desmatonador || role == UserRole.fumigador;
+
+  bool get canAccessInventoryModule => role == UserRole.presidente || role == UserRole.administradora || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno || role == UserRole.veterinario;
+
+  bool get canAccessTasksModule => true;
+
+  bool get canAccessFinanceModule => role == UserRole.presidente || role == UserRole.administradora;
+
+  bool get canAccessUsersModule => role == UserRole.presidente;
+
+  bool get canAccessReportsModule => role == UserRole.presidente;
 
   // Solo el presidente puede actualizar o eliminar registros en módulos principales
   bool get canUpdateOrDeleteRecords => role == UserRole.presidente;

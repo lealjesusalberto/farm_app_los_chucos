@@ -6,15 +6,18 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/animal_service.dart';
 import '../services/land_service.dart';
+import '../services/task_service.dart';
 import '../models/user_models.dart';
 import '../models/animal_models.dart';
 import 'animal_production_screen.dart';
 import 'production_summary_screen.dart';
 import 'potreros_module_screen.dart';
+import 'tasks_module_screen.dart';
 import 'inventory_hub_screen.dart';
 import 'finance_hub_screen.dart';
 import 'package:intl/intl.dart';
 import '../models/land_models.dart';
+import '../models/task_models.dart';
 import 'user_management_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -24,6 +27,10 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUser;
+    final taskService = Provider.of<TaskService>(context);
+    
+    final isAdmin = user?.canAdminUsers ?? false;
+    final pendingTasks = taskService.tasks.where((w) => w.status == 'Pendiente' && w.assignedToUserId == user?.id).toList();
 
     return Scaffold(
       drawer: _buildDrawer(context, user),
@@ -42,6 +49,14 @@ class DashboardScreen extends StatelessWidget {
                     }),
                     const SizedBox(height: 15),
                     _buildStatsGrid(context),
+                    if (pendingTasks.isNotEmpty && !isAdmin) ...[
+                      const SizedBox(height: 25),
+                      _buildSectionTitle('Mis Tareas Pendientes', onSeeAll: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const TasksModuleScreen()));
+                      }),
+                      const SizedBox(height: 15),
+                      _buildMyTasksPanel(context, pendingTasks),
+                    ],
                     const SizedBox(height: 30),
                     _buildSectionTitle('Módulos Principales'),
                     const SizedBox(height: 15),
@@ -57,8 +72,9 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, AppUser? user) {
-    final landService = Provider.of<LandService>(context);
-    final pendingTasks = landService.fieldWorkHistory.where((w) => w.assignedToUserId == user?.id && w.status == 'Pendiente').toList();
+    final taskService = Provider.of<TaskService>(context);
+    final isAdmin = user?.canAdminUsers ?? false;
+    final pendingTasks = taskService.tasks.where((w) => w.status == 'Pendiente' && (isAdmin || w.assignedToUserId == user?.id)).toList();
 
     return Stack(
       children: [
@@ -239,7 +255,7 @@ class DashboardScreen extends StatelessWidget {
         .fold(0.0, (sum, r) => sum + r.totalLiters);
     final milkStr = '${(todayMilk % 1 == 0 ? todayMilk.toInt() : todayMilk.toStringAsFixed(1))}L';
 
-    final tasksCount = landService.fieldWorkHistory.length;
+    final tasksCount = Provider.of<TaskService>(context).tasks.length;
 
     return GridView.count(
       shrinkWrap: true,
@@ -477,8 +493,8 @@ class DashboardScreen extends StatelessWidget {
       ));
     }
 
-    // Módulo Potreros: Solo si canManageLand
-    if (user?.canManageLand ?? false) {
+    // Módulo Potreros
+    if (user?.canAccessPotrerosModule ?? false) {
       modules.add(_buildModuleItem(
         context,
         'Potreros',
@@ -490,7 +506,7 @@ class DashboardScreen extends StatelessWidget {
       ));
     }
 
-    if (user?.canManageInventory ?? false) {
+    if (user?.canAccessInventoryModule ?? false) {
       modules.add(_buildModuleItem(
         context,
         'Inventario',
@@ -502,7 +518,19 @@ class DashboardScreen extends StatelessWidget {
       ));
     }
 
-    if (user?.canManageFinance ?? false) {
+    if (user?.canAccessTasksModule ?? false) {
+      modules.add(_buildModuleItem(
+        context,
+        'Tareas',
+        'https://images.pexels.com/photos/5980/food-sunset-love-field.jpg?auto=compress&cs=tinysrgb&w=500',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TasksModuleScreen()),
+        ),
+      ));
+    }
+
+    if (user?.canAccessFinanceModule ?? false) {
       modules.add(_buildModuleItem(
         context,
         'Finanzas',
@@ -514,10 +542,10 @@ class DashboardScreen extends StatelessWidget {
       ));
     }
 
-    if (user?.canAdminUsers ?? false) {
+    if (user?.canAccessUsersModule ?? false) {
       modules.add(_buildModuleItem(
         context,
-        'Personal',
+        'Usuarios',
         'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=500',
         () => Navigator.push(
           context,
@@ -526,7 +554,7 @@ class DashboardScreen extends StatelessWidget {
       ));
     }
 
-    if (user?.canManageFinance ?? false || (user?.canManageInventory ?? false)) {
+    if (user?.canAccessReportsModule ?? false) {
       modules.add(_buildModuleItem(
         context,
         'Reportes',
@@ -640,7 +668,7 @@ class DashboardScreen extends StatelessWidget {
                   title: const Text('Inicio'),
                   onTap: () => Navigator.pop(context),
                 ),
-                if (user?.canAdminUsers ?? false)
+                if (user?.canAccessUsersModule ?? false)
                   ListTile(
                     leading: const Icon(Icons.people, color: Colors.grey),
                     title: const Text('Gestión de Usuarios'),
@@ -672,8 +700,27 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showNotificationsBottomSheet(BuildContext context, List<FieldWork> tasks) {
-    final landService = Provider.of<LandService>(context, listen: false);
+  Widget _buildMyTasksPanel(BuildContext context, List<FarmTask> tasks) {
+    // Tomamos máximo 3 para mostrar en el dashboard
+    final displayTasks = tasks.take(3).toList();
+    return Column(
+      children: displayTasks.map((task) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.orange, width: 1.5)),
+          child: ListTile(
+            leading: const Icon(Icons.assignment, color: Colors.orange),
+            title: Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.orange.shade800)),
+            subtitle: Text('Programada: ${DateFormat('dd/MM/yy').format(task.date)}'),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TasksModuleScreen())),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _showNotificationsBottomSheet(BuildContext context, List<FarmTask> tasks) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
@@ -697,30 +744,28 @@ class DashboardScreen extends StatelessWidget {
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
-                    final potrero = landService.potreros.firstWhere((p) => p.id == task.potreroId, orElse: () => Potrero(id: '', name: 'Potrero Borrado', areaTareas: 0));
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                       child: ListTile(
                         leading: const CircleAvatar(backgroundColor: Colors.orangeAccent, child: Icon(Icons.assignment_late, color: Colors.white, size: 20)),
-                        title: Text('${task.type} en ${potrero.name}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text('Programada: ${DateFormat('dd/MM/yyyy').format(task.date)}\n${task.details ?? ''}'),
                         trailing: IconButton(
                           icon: const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 28),
                           onPressed: () async {
-                            final potrero = Provider.of<LandService>(context, listen: false).potreros.firstWhere((p) => p.id == task.potreroId, orElse: () => Potrero(id: '', name: 'Potrero Borrado', areaTareas: 0));
                             showDialog(
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 title: const Text('Completar Tarea'),
-                                content: Text('¿Confirmas que completaste la labor de ${task.type} en el potrero ${potrero.name}?'),
+                                content: Text('¿Confirmas que completaste la labor "${task.title}"?'),
                                 actions: [
                                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCELAR')),
                                   TextButton(
                                     onPressed: () async {
                                       Navigator.pop(ctx);
-                                      await Provider.of<LandService>(context, listen: false).updateFieldWork(task.id, {'status': 'Completada'});
+                                      await Provider.of<TaskService>(context, listen: false).updateTask(task.id, {'status': 'Completada'});
                                       if (context.mounted) Navigator.pop(context); // Close the sheet to refresh
                                     },
                                     child: const Text('SÍ, COMPLETADA', style: TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold)),

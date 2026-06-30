@@ -45,50 +45,58 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primaryGreen,
-              AppColors.secondaryGreen,
-            ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background Image
+          Image.asset(
+            'assets/dashboard_bg.png', // Using dashboard_bg.png as a farm background
+            fit: BoxFit.cover,
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FadeInDown(
-              duration: const Duration(milliseconds: 1500),
-              child: Image.asset(
-                'assets/logo.png',
-                width: 200,
+          // Soft white gradient from top fading down
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.white.withOpacity(0.85),
+                  Colors.white.withOpacity(0.4),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.3, 0.55, 0.8],
               ),
             ),
-            const SizedBox(height: 20),
-            FadeInUp(
-              duration: const Duration(milliseconds: 1500),
-              child: const Text(
-                'AgroGestión "Los Chucos"',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
+          ),
+          // Content
+          SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 50.0),
+                  child: FadeInDown(
+                    duration: const Duration(milliseconds: 1500),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      width: 220,
+                    ),
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 60.0),
+                  child: FadeIn(
+                    delay: const Duration(milliseconds: 1000),
+                    child: const CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            FadeIn(
-              delay: const Duration(milliseconds: 1000),
-              child: const CircularProgressIndicator(
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

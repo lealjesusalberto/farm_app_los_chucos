@@ -42,6 +42,46 @@ class Animal {
     this.productiveStatus,
   });
 
+  Animal copyWith({
+    String? id,
+    String? code,
+    String? name,
+    String? photoUrl,
+    AnimalType? type,
+    String? breed,
+    String? sex,
+    DateTime? birthDate,
+    DateTime? entryDate,
+    AnimalOrigin? origin,
+    double? currentWeight,
+    String? currentLocation,
+    String? group,
+    String? fatherId,
+    String? motherId,
+    String? status,
+    String? productiveStatus,
+  }) {
+    return Animal(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? this.name,
+      photoUrl: photoUrl ?? this.photoUrl,
+      type: type ?? this.type,
+      breed: breed ?? this.breed,
+      sex: sex ?? this.sex,
+      birthDate: birthDate ?? this.birthDate,
+      entryDate: entryDate ?? this.entryDate,
+      origin: origin ?? this.origin,
+      currentWeight: currentWeight ?? this.currentWeight,
+      currentLocation: currentLocation ?? this.currentLocation,
+      group: group ?? this.group,
+      fatherId: fatherId ?? this.fatherId,
+      motherId: motherId ?? this.motherId,
+      status: status ?? this.status,
+      productiveStatus: productiveStatus ?? this.productiveStatus,
+    );
+  }
+
   int get ageInMonths {
     final now = DateTime.now();
     return (now.year - birthDate.year) * 12 + now.month - birthDate.month;
@@ -259,7 +299,10 @@ class ReproductionRecord {
   final String? serviceType; // e.g. "IA", "Monta Natural"
   final bool? isPregnant;
   final String? calfId;
+  final String? calfName;
+  final String? calfPhotoUrl;
   final String? notes;
+  final int? offspringCount;
 
   ReproductionRecord({
     required this.id,
@@ -272,7 +315,10 @@ class ReproductionRecord {
     this.serviceType,
     this.isPregnant,
     this.calfId,
+    this.calfName,
+    this.calfPhotoUrl,
     this.notes,
+    this.offspringCount,
   });
 
   Map<String, dynamic> toMap() {
@@ -286,7 +332,10 @@ class ReproductionRecord {
       'serviceType': serviceType,
       'isPregnant': isPregnant,
       'calfId': calfId,
+      'calfName': calfName,
+      'calfPhotoUrl': calfPhotoUrl,
       'notes': notes,
+      'offspringCount': offspringCount,
     };
   }
 
@@ -302,7 +351,10 @@ class ReproductionRecord {
       serviceType: map['serviceType']?.toString(),
       isPregnant: map['isPregnant'] as bool?,
       calfId: map['calfId']?.toString(),
+      calfName: map['calfName']?.toString(),
+      calfPhotoUrl: map['calfPhotoUrl']?.toString(),
       notes: map['notes']?.toString(),
+      offspringCount: map['offspringCount'] != null ? (map['offspringCount'] as num).toInt() : null,
     );
   }
 
@@ -362,6 +414,8 @@ class HealthRecord {
   final String? notes;
   final String? animalId;
   final String? animalType;
+  final String? frequency; // e.g., "Cada 24 horas"
+  final String? assignedTo;
 
   HealthRecord({
     required this.id,
@@ -373,6 +427,8 @@ class HealthRecord {
     this.notes,
     this.animalId,
     this.animalType,
+    this.frequency,
+    this.assignedTo,
   });
 
   Map<String, dynamic> toMap() {
@@ -385,6 +441,8 @@ class HealthRecord {
       'notes': notes,
       'animalId': animalId,
       'animalType': animalType,
+      'frequency': frequency,
+      'assignedTo': assignedTo,
     };
   }
 
@@ -399,6 +457,8 @@ class HealthRecord {
       notes: map['notes']?.toString(),
       animalId: map['animalId']?.toString(),
       animalType: map['animalType']?.toString(),
+      frequency: map['frequency']?.toString(),
+      assignedTo: map['assignedTo']?.toString(),
     );
   }
 

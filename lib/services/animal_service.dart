@@ -200,10 +200,20 @@ class AnimalService extends ChangeNotifier {
   }
 
   Future<void> addAnimal(Animal animal) async {
+    final temp = List<Animal>.from(_animals)..insert(0, animal);
+    _animals = temp;
+    notifyListeners();
     await _animalsRef.push().set(animal.toMap());
   }
 
   Future<void> updateAnimal(Animal animal) async {
+    final index = _animals.indexWhere((a) => a.id == animal.id);
+    if (index != -1) {
+      final temp = List<Animal>.from(_animals);
+      temp[index] = animal;
+      _animals = temp;
+      notifyListeners();
+    }
     await _animalsRef.child(animal.id).update(animal.toMap());
   }
 
@@ -236,6 +246,9 @@ class AnimalService extends ChangeNotifier {
   }
 
   Future<void> addReproductionRecord(ReproductionRecord record) async {
+    final temp = List<ReproductionRecord>.from(_reproductionRecords)..insert(0, record);
+    _reproductionRecords = temp;
+    notifyListeners();
     await _reproductionRef.push().set(record.toMap());
   }
 
@@ -265,10 +278,38 @@ class AnimalService extends ChangeNotifier {
   }
 
   Future<void> addHealthRecord(HealthRecord record) async {
+    final temp = List<HealthRecord>.from(_healthRecords)..insert(0, record);
+    _healthRecords = temp;
+    notifyListeners();
     await _healthRef.push().set(record.toMap());
   }
 
+  Future<void> updateHealthRecord(String id, Map<String, dynamic> updates) async {
+    await _healthRef.child(id).update(updates);
+  }
+
+  Future<void> deleteHealthRecord(String id) async {
+    await _healthRef.child(id).remove();
+  }
+
   Future<void> registerDeath(DeathRecord record) async {
+    // Optimistic UI updates
+    final tempDeaths = List<DeathRecord>.from(_deathRecords)..insert(0, record);
+    _deathRecords = tempDeaths;
+
+    final animalIndex = _animals.indexWhere((a) => a.id == record.animalId);
+    if (animalIndex != -1) {
+      final tempAnimals = List<Animal>.from(_animals);
+      final updatedAnimal = tempAnimals[animalIndex].copyWith(
+        status: 'dead',
+        currentLocation: 'Baja',
+        group: 'Baja',
+      );
+      tempAnimals[animalIndex] = updatedAnimal;
+      _animals = tempAnimals;
+    }
+    notifyListeners();
+
     await _deathRef.push().set(record.toMap());
     await _animalsRef.child(record.animalId).update({
       'status': 'dead',
