@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/animal_models.dart';
 import 'package:provider/provider.dart';
 import '../services/animal_service.dart';
+import '../services/auth_service.dart';
 import '../services/land_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -398,6 +399,35 @@ class _AddAnimalScreenState extends State<AddAnimalScreen> {
           status: widget.animal?.status ?? 'active',
           productiveStatus: showProductiveStatus ? _productiveStatus : null,
         );
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final currentUser = authService.currentUser;
+        final needsApproval = currentUser?.needsApprovalToEdit == true && widget.animal != null;
+
+        if (needsApproval) {
+          final request = AnimalEditRequest(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            animalId: widget.animal!.id,
+            animalCode: widget.animal!.code,
+            animalName: widget.animal!.name,
+            requestedById: currentUser?.id ?? 'Desconocido',
+            requestedByName: currentUser?.name ?? 'Usuario',
+            requestedByEmail: currentUser?.email ?? '',
+            requestedAt: DateTime.now(),
+            status: 'pending',
+            originalData: widget.animal!.toMap(),
+            newData: newAnimal.toMap(),
+          );
+          await animalService.addEditRequest(request);
+          if (!mounted) return;
+          Navigator.pop(context); // Pop loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Solicitud de modificación enviada al presidente para su aprobación.'),
+            backgroundColor: Colors.orange,
+          ));
+          Navigator.pop(context); // Pop screen
+          return;
+        }
+
         if (widget.animal != null) {
           await animalService.updateAnimal(newAnimal);
         } else {

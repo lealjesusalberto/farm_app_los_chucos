@@ -100,7 +100,7 @@ class AnimalDetailScreen extends StatelessWidget {
       pinned: true,
       backgroundColor: AppColors.primaryGreen,
       actions: [
-        if (user?.canUpdateOrDeleteRecords == true)
+        if (user?.canEditAnimal == true)
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             decoration: BoxDecoration(
@@ -120,7 +120,7 @@ class AnimalDetailScreen extends StatelessWidget {
               },
             ),
           ),
-        if (user?.canUpdateOrDeleteRecords == true)
+        if (user?.canDeleteAnimal == true)
           Container(
           margin: const EdgeInsets.only(right: 12, left: 4, top: 8, bottom: 8),
           decoration: BoxDecoration(
@@ -133,14 +133,17 @@ class AnimalDetailScreen extends StatelessWidget {
               color: Colors.white,
               size: 20,
             ),
-            tooltip: 'Eliminar Animal',
+            tooltip: user?.needsApprovalToDelete == true ? 'Solicitar Eliminación' : 'Eliminar Animal',
             onPressed: () {
+              final needsApproval = user?.needsApprovalToDelete == true;
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Eliminar Animal'),
-                  content: const Text(
-                    '¿Estás seguro de que deseas eliminar este registro permanentemente?',
+                  title: Text(needsApproval ? 'Solicitar Eliminación' : 'Eliminar Animal'),
+                  content: Text(
+                    needsApproval
+                        ? '¿Estás seguro de que deseas enviar una solicitud para eliminar este animal?'
+                        : '¿Estás seguro de que deseas eliminar este registro permanentemente?',
                   ),
                   actions: [
                     TextButton(
@@ -153,24 +156,74 @@ class AnimalDetailScreen extends StatelessWidget {
                     TextButton(
                       onPressed: () async {
                         Navigator.pop(ctx);
-                        final animalService = Provider.of<AnimalService>(
-                          context,
-                          listen: false,
+                        
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(child: CircularProgressIndicator()),
                         );
-                        await animalService.deleteAnimal(animal.id);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Animal eliminado exitosamente'),
-                              backgroundColor: Colors.red,
-                            ),
+                        
+                        try {
+                          final animalService = Provider.of<AnimalService>(
+                            context,
+                            listen: false,
                           );
+                          
+                          if (needsApproval) {
+                            final request = AnimalEditRequest(
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
+                              animalId: animal.id,
+                              animalCode: animal.code,
+                              animalName: animal.name,
+                              requestedById: user?.id ?? 'Desconocido',
+                              requestedByName: user?.name ?? 'Usuario',
+                              requestedByEmail: user?.email ?? '',
+                              requestedAt: DateTime.now(),
+                              status: 'pending',
+                              requestType: 'delete',
+                              originalData: animal.toMap(),
+                              newData: {},
+                            );
+                            await animalService.addEditRequest(request);
+                            
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close loading indicator
+                              Navigator.pop(context); // Go back to previous screen
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Solicitud de eliminación enviada al presidente.'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          } else {
+                            await animalService.deleteAnimal(animal.id);
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close loading indicator
+                              Navigator.pop(context); // Go back to previous screen
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Animal eliminado exitosamente'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close loading indicator
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         }
                       },
-                      child: const Text(
-                        'Eliminar',
-                        style: TextStyle(color: Colors.red),
+                      child: Text(
+                        needsApproval ? 'Solicitar' : 'Eliminar',
+                        style: const TextStyle(color: Colors.red),
                       ),
                     ),
                   ],

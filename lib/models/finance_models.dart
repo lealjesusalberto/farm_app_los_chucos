@@ -3,11 +3,18 @@ enum TransactionType { income, expense }
 class FinanceTransaction {
   final String id;
   final String title;
-  final String category; // 'Venta Leche', 'Venta Ganado', 'Nómina', 'Insumos', etc.
+  final String category; // 'Venta Leche', 'Venta Queso', 'Venta Ganado', 'Nómina', 'Insumos', 'Medicinas', 'Herramientas', etc.
   final double amount;
   final TransactionType type;
   final DateTime date;
   final String? notes;
+
+  // Campos adicionales para Libro Diario y Registro de Compras
+  final double? quantity;
+  final String? unit; // 'Sacos', 'Kg', 'Litros', 'Libras', 'mg', 'Unidades'
+  final String? vendor; // Proveedor o Vendedor / Cliente
+  final String? invoiceNumber; // Número de Factura o Nota de Entrega
+  final String? receiptUrl; // Imagen / Documento de comprobante
 
   FinanceTransaction({
     required this.id,
@@ -17,6 +24,11 @@ class FinanceTransaction {
     required this.type,
     required this.date,
     this.notes,
+    this.quantity,
+    this.unit,
+    this.vendor,
+    this.invoiceNumber,
+    this.receiptUrl,
   });
 
   Map<String, dynamic> toMap() {
@@ -27,6 +39,11 @@ class FinanceTransaction {
       'type': type.name,
       'date': date.toIso8601String(),
       'notes': notes,
+      'quantity': quantity,
+      'unit': unit,
+      'vendor': vendor,
+      'invoiceNumber': invoiceNumber,
+      'receiptUrl': receiptUrl,
     };
   }
 
@@ -39,6 +56,11 @@ class FinanceTransaction {
       type: map['type'] == 'income' ? TransactionType.income : TransactionType.expense,
       date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
       notes: map['notes'],
+      quantity: map['quantity'] != null ? (map['quantity'] as num).toDouble() : null,
+      unit: map['unit'],
+      vendor: map['vendor'],
+      invoiceNumber: map['invoiceNumber'],
+      receiptUrl: map['receiptUrl'],
     );
   }
 }

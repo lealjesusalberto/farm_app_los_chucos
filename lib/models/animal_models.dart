@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 enum AnimalType { bovine, buffalo, equine, porcine, poultry, dog }
 enum AnimalOrigin { nacimiento, comprado }
 
@@ -416,6 +414,9 @@ class HealthRecord {
   final String? animalType;
   final String? frequency; // e.g., "Cada 24 horas"
   final String? assignedTo;
+  final String? inventoryItemId; // ID del producto médico en el inventario
+  final double? dosesPerAnimal; // Dosis por animal aplicadas
+  final double? totalDosesApplied; // Cantidad total de dosis descontadas
 
   HealthRecord({
     required this.id,
@@ -429,6 +430,9 @@ class HealthRecord {
     this.animalType,
     this.frequency,
     this.assignedTo,
+    this.inventoryItemId,
+    this.dosesPerAnimal,
+    this.totalDosesApplied,
   });
 
   Map<String, dynamic> toMap() {
@@ -443,6 +447,9 @@ class HealthRecord {
       'animalType': animalType,
       'frequency': frequency,
       'assignedTo': assignedTo,
+      'inventoryItemId': inventoryItemId,
+      'dosesPerAnimal': dosesPerAnimal,
+      'totalDosesApplied': totalDosesApplied,
     };
   }
 
@@ -459,6 +466,9 @@ class HealthRecord {
       animalType: map['animalType']?.toString(),
       frequency: map['frequency']?.toString(),
       assignedTo: map['assignedTo']?.toString(),
+      inventoryItemId: map['inventoryItemId']?.toString(),
+      dosesPerAnimal: map['dosesPerAnimal'] != null ? (map['dosesPerAnimal'] as num).toDouble() : null,
+      totalDosesApplied: map['totalDosesApplied'] != null ? (map['totalDosesApplied'] as num).toDouble() : null,
     );
   }
 
@@ -494,3 +504,67 @@ extension AnimalTypeGroups on AnimalType {
     }
   }
 }
+
+class AnimalEditRequest {
+  final String id;
+  final String animalId;
+  final String animalCode;
+  final String? animalName;
+  final String requestedById;
+  final String requestedByName;
+  final String requestedByEmail;
+  final DateTime requestedAt;
+  final String status; // 'pending', 'approved', 'rejected'
+  final String requestType; // 'edit', 'delete'
+  final Map<String, dynamic> originalData;
+  final Map<String, dynamic> newData;
+
+  AnimalEditRequest({
+    required this.id,
+    required this.animalId,
+    required this.animalCode,
+    this.animalName,
+    required this.requestedById,
+    required this.requestedByName,
+    required this.requestedByEmail,
+    required this.requestedAt,
+    this.status = 'pending',
+    this.requestType = 'edit',
+    required this.originalData,
+    required this.newData,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'animalId': animalId,
+      'animalCode': animalCode,
+      'animalName': animalName,
+      'requestedById': requestedById,
+      'requestedByName': requestedByName,
+      'requestedByEmail': requestedByEmail,
+      'requestedAt': requestedAt.toIso8601String(),
+      'status': status,
+      'requestType': requestType,
+      'originalData': originalData,
+      'newData': newData,
+    };
+  }
+
+  factory AnimalEditRequest.fromMap(String id, Map<String, dynamic> map) {
+    return AnimalEditRequest(
+      id: id,
+      animalId: map['animalId'] ?? '',
+      animalCode: map['animalCode'] ?? '',
+      animalName: map['animalName'],
+      requestedById: map['requestedById'] ?? '',
+      requestedByName: map['requestedByName'] ?? '',
+      requestedByEmail: map['requestedByEmail'] ?? '',
+      requestedAt: DateTime.tryParse(map['requestedAt']?.toString() ?? '') ?? DateTime.now(),
+      status: map['status'] ?? 'pending',
+      requestType: map['requestType'] ?? 'edit',
+      originalData: Map<String, dynamic>.from(map['originalData'] ?? {}),
+      newData: Map<String, dynamic>.from(map['newData'] ?? {}),
+    );
+  }
+}
+

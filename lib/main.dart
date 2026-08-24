@@ -13,6 +13,7 @@ import 'services/inventory_service.dart';
 import 'services/finance_service.dart';
 import 'services/auth_service.dart';
 import 'services/task_service.dart';
+import 'services/worker_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => InventoryService()),
         ChangeNotifierProvider(create: (_) => FinanceService()),
         ChangeNotifierProvider(create: (_) => TaskService()),
+        ChangeNotifierProvider(create: (_) => WorkerService()),
       ],
       child: const LosChucosApp(),
     ),

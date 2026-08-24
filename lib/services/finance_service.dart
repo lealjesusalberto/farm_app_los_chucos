@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/finance_models.dart';
+import 'inventory_service.dart';
+import 'worker_service.dart';
 
 class FinanceService extends ChangeNotifier {
   final DatabaseReference _transactionsRef = FirebaseDatabase.instance.ref('financeTransactions');
@@ -119,6 +121,10 @@ class FinanceService extends ChangeNotifier {
     await newRef.set(transaction.toMap());
   }
 
+  Future<void> deleteTransaction(String id) async {
+    await _transactionsRef.child(id).remove();
+  }
+
   Future<void> addEmployee(Employee employee) async {
     final newRef = _employeesRef.push();
     await newRef.set(employee.toMap());
@@ -128,7 +134,6 @@ class FinanceService extends ChangeNotifier {
     final newRef = _payrollRef.push();
     await newRef.set(record.toMap());
 
-    // Auto-crear transacción de gasto para esta nómina
     final empSnapshot = await _employeesRef.child(record.employeeId).get();
     String empName = 'Empleado';
     if (empSnapshot.exists) {
@@ -144,5 +149,66 @@ class FinanceService extends ChangeNotifier {
       type: TransactionType.expense,
       date: record.paymentDate,
     ));
+  }
+
+  // -------------------------------------------------------------
+  // CONTABILIDAD: LIBRO DIARIO, LIBRO MAYOR & BALANCE GENERAL
+  // -------------------------------------------------------------
+
+  // Consolidado por Categorías para el Libro Mayor
+  Map<String, Map<String, double>> getLedgerCategorySummary() {
+    final Map<String, Map<String, double>> summary = {};
+
+    for (var tx in _transactions) {
+      if (!summary.containsKey(tx.category)) {
+        summary[tx.category] = {'ingresos': 0.0, 'egresos': 0.0, 'neto': 0.0};
+      }
+      if (tx.type == TransactionType.income) {
+        summary[tx.category]!['ingresos'] = (summary[tx.category]!['ingresos'] ?? 0) + tx.amount;
+      } else {
+        summary[tx.category]!['egresos'] = (summary[tx.category]!['egresos'] ?? 0) + tx.amount;
+      }
+      summary[tx.category]!['neto'] = summary[tx.category]!['ingresos']! - summary[tx.category]!['egresos']!;
+    }
+
+    return summary;
+  }
+
+  // Valoración Monetaria del Inventario (Activo)
+  double getInventoryTotalValue(InventoryService? inventoryService) {
+    if (inventoryService == null) return 0.0;
+    double total = 0.0;
+    for (var item in inventoryService.items) {
+      // Estimar precio unitario base si no se encuentra definido ($10.0 valor estándar)
+      double unitPrice = 10.0;
+      total += (item.stock * unitPrice);
+    }
+    return total;
+  }
+
+  // Pasivos Laborales de RRHH (Prestaciones Sociales + Vacaciones + Parafiscales)
+  double getWorkerTotalPassives(WorkerService? workerService) {
+    if (workerService == null) return 0.0;
+    return workerService.totalAccumulatedSeverance +
+        workerService.totalAccumulatedVacations +
+        workerService.totalAccumulatedProfits +
+        workerService.monthlyIvssTotal +
+        workerService.monthlyFaovTotal +
+        workerService.monthlyIncesTotal;
+  }
+
+  // Total Activos = Disponible en Caja + Valor Inventarios
+  double getTotalAssets(InventoryService? inventoryService, {double accountsReceivable = 0.0}) {
+    return balance + getInventoryTotalValue(inventoryService) + accountsReceivable;
+  }
+
+  // Total Pasivos = Pasivos Laborales LOTTT + Cuentas por Pagar Proveedores
+  double getTotalLiabilities(WorkerService? workerService, {double accountsPayable = 0.0}) {
+    return getWorkerTotalPassives(workerService) + accountsPayable;
+  }
+
+  // Patrimonio Neto = Total Activos - Total Pasivos
+  double getNetEquity(InventoryService? inventoryService, WorkerService? workerService, {double ar = 0.0, double ap = 0.0}) {
+    return getTotalAssets(inventoryService, accountsReceivable: ar) - getTotalLiabilities(workerService, accountsPayable: ap);
   }
 }

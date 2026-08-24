@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:animate_do/animate_do.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/app_colors.dart';
 import '../models/inventory_models.dart';
 import 'package:provider/provider.dart';
 import '../services/inventory_service.dart';
+import 'package:intl/intl.dart';
+import 'add_inventory_item_screen.dart';
 import 'inventory_list_screen.dart';
+import 'projects_detail_screen.dart';
 
 class InventoryHubScreen extends StatelessWidget {
   const InventoryHubScreen({super.key});
@@ -14,16 +15,27 @@ class InventoryHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddInventoryItemScreen()),
+          );
+        },
+        backgroundColor: AppColors.primaryGreen,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Nuevo Producto', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       body: CustomScrollView(
         slivers: [
           _buildSliverHeader(context),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FadeInDown(child: _buildAlertSummary(context)),
+                  _buildAlertSummary(context),
                   const SizedBox(height: 25),
                   const Text('Categorías de Inventario', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                   const SizedBox(height: 15),
@@ -31,7 +43,7 @@ class InventoryHubScreen extends StatelessWidget {
                   const SizedBox(height: 30),
                   const Text('Movimientos Recientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                   const SizedBox(height: 15),
-                  _buildRecentTransactions(),
+                  _buildRecentTransactions(context),
                 ],
               ),
             ),
@@ -119,19 +131,72 @@ class InventoryHubScreen extends StatelessWidget {
       crossAxisCount: 2,
       crossAxisSpacing: 15,
       mainAxisSpacing: 15,
-      childAspectRatio: 1.1,
+      childAspectRatio: 1.05,
       children: [
-        _buildCategoryCard(context, 'Agrícola', 'Semillas y Químicos', Icons.grass, Colors.green, InventoryCategory.agricola),
-        _buildCategoryCard(context, 'Medicinas', 'Veterinaria', Icons.medical_services, Colors.blue, InventoryCategory.medicina),
-        _buildCategoryCard(context, 'Madera', 'Infraestructura', Icons.fence, Colors.brown, InventoryCategory.madera),
-        _buildCategoryCard(context, 'Herramientas', 'Bienes Muebles', Icons.handyman, Colors.orange, InventoryCategory.maquinaria),
+        _buildCategoryCard(
+          context,
+          '1. Insumos',
+          'Médicos, Vet, Alimentos, Concentrados',
+          Icons.grass,
+          Colors.green,
+          InventoryCategory.insumos,
+        ),
+        _buildCategoryCard(
+          context,
+          '2. Proyectos',
+          'Infraestructura & Obras',
+          Icons.foundation,
+          Colors.deepOrange,
+          InventoryCategory.proyectos,
+        ),
+        _buildCategoryCard(
+          context,
+          '3. Herramientas & Madera',
+          'Construcción, Mecánica & Madera',
+          Icons.construction,
+          Colors.brown,
+          InventoryCategory.herramientas,
+        ),
+        _buildCategoryCard(
+          context,
+          '4. Equipos y Maquinaria',
+          'Tractores, Bombas, Generadores',
+          Icons.precision_manufacturing,
+          Colors.indigo,
+          InventoryCategory.maquinaria,
+        ),
       ],
     );
   }
 
-  Widget _buildCategoryCard(BuildContext context, String title, String sub, IconData icon, Color color, InventoryCategory cat) {
+  Widget _buildCategoryCard(
+    BuildContext context,
+    String title,
+    String sub,
+    IconData icon,
+    Color color,
+    InventoryCategory cat,
+  ) {
+    final service = Provider.of<InventoryService>(context);
+    final count = service.getItemsByCategory(cat).length;
+
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InventoryListScreen(category: cat, categoryName: title))),
+      onTap: () {
+        if (cat == InventoryCategory.proyectos) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProjectsDetailScreen()),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => InventoryListScreen(category: cat, categoryName: title),
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
@@ -142,30 +207,130 @@ class InventoryHubScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                  child: Icon(icon, color: color, size: 26),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count ítems',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            Text(sub, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              style: const TextStyle(color: Colors.grey, fontSize: 10),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRecentTransactions() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: const Center(
-        child: Text('No hay movimientos recientes', style: TextStyle(color: Colors.grey, fontSize: 13)),
-      ),
+  Widget _buildRecentTransactions(BuildContext context) {
+    final service = Provider.of<InventoryService>(context);
+    final transactions = service.transactions.take(5).toList();
+
+    if (transactions.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: const Center(
+          child: Text('No hay movimientos recientes', style: TextStyle(color: Colors.grey, fontSize: 13)),
+        ),
+      );
+    }
+
+    return Column(
+      children: transactions.map((tx) {
+        final isEntrada = tx.type == 'Entrada';
+        final item = service.getItemById(tx.itemId);
+        final itemName = item?.name ?? 'Producto';
+        final unit = item?.unit ?? '';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8)],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isEntrada ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isEntrada ? Icons.arrow_downward : Icons.arrow_upward,
+                  color: isEntrada ? Colors.green : Colors.red,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(
+                      '${tx.responsible} • ${DateFormat('dd/MM HH:mm').format(tx.date)}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${isEntrada ? '+' : '-'}${tx.quantity} $unit',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isEntrada ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  Text(
+                    tx.type,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

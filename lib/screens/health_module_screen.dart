@@ -9,6 +9,8 @@ import '../services/animal_service.dart';
 import '../services/auth_service.dart';
 import '../models/user_models.dart';
 import '../widgets/animal_selector.dart';
+import '../services/inventory_service.dart';
+import '../models/inventory_models.dart';
 
 class HealthModuleScreen extends StatelessWidget {
   const HealthModuleScreen({super.key});
@@ -1012,6 +1014,9 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
   final _notesController = TextEditingController();
   final _customFrequencyController = TextEditingController();
   
+  InventoryItem? _selectedInventoryItem;
+  final _dosesPerAnimalController = TextEditingController(text: '1.0');
+
   DateTime _startDate = DateTime.now();
   bool _scheduleNext = false;
   DateTime _nextDueDate = DateTime.now().add(const Duration(days: 30));
@@ -1046,6 +1051,9 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
         _treatmentFrequency = r.frequency;
       }
       _assignedTo = r.assignedTo;
+      if (r.dosesPerAnimal != null) {
+        _dosesPerAnimalController.text = r.dosesPerAnimal.toString();
+      }
     } else {
       if (widget.initialTabIndex == 1) {
         _selectedType = HealthRecordType.bath;
@@ -1058,6 +1066,15 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
     if (!_isIndividual && _selectedGroup == null) {
       _selectedGroup = _selectedAnimalType.ageGroups.first;
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _notesController.dispose();
+    _customFrequencyController.dispose();
+    _dosesPerAnimalController.dispose();
+    super.dispose();
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -1092,9 +1109,28 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
   Widget build(BuildContext context) {
     final animalService = Provider.of<AnimalService>(context, listen: false);
     final authService = Provider.of<AuthService>(context, listen: false);
+    final inventoryService = Provider.of<InventoryService>(context);
+
+    final medicalInventoryItems = inventoryService.items.where((i) =>
+      i.category == InventoryCategory.noConsumibles ||
+      i.subCategory == 'Insumos Médicos Veterinarios' ||
+      i.unit.toLowerCase().contains('dosis') ||
+      i.unit.toLowerCase().contains('ml') ||
+      i.unit.toLowerCase().contains('gr')
+    ).toList();
     
     // Filter animals by type
     final filteredAnimals = animalService.animals.where((a) => a.type == _selectedAnimalType).toList();
+
+    // Cálculo de dosis totales
+    double dosesPerAnimal = double.tryParse(_dosesPerAnimalController.text.trim()) ?? 1.0;
+    int targetAnimalCount = 1;
+    if (!_isIndividual) {
+      final inGroup = filteredAnimals.where((a) => a.group == _selectedGroup).length;
+      targetAnimalCount = inGroup > 0 ? inGroup : (filteredAnimals.isNotEmpty ? filteredAnimals.length : 1);
+    }
+    double calculatedTotalDoses = dosesPerAnimal * targetAnimalCount;
+    bool isInsufficient = _selectedInventoryItem != null && calculatedTotalDoses > _selectedInventoryItem!.stock;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 20, left: 20, right: 20, top: 20),
@@ -1205,6 +1241,41 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
               ),
             const SizedBox(height: 15),
 
+            // Selector de Insumos de Inventario
+            DropdownButtonFormField<InventoryItem?>(
+              value: _selectedInventoryItem,
+              isExpanded: true,
+              items: [
+                const DropdownMenuItem<InventoryItem?>(
+                  value: null,
+                  child: Text('Ingreso manual (sin descontar inventario)', style: TextStyle(color: Colors.grey)),
+                ),
+                ...medicalInventoryItems.map((item) {
+                  return DropdownMenuItem<InventoryItem?>(
+                    value: item,
+                    child: Text(
+                      '${item.name} • Stock: ${item.stock} ${item.unit}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  );
+                }),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  _selectedInventoryItem = val;
+                  if (val != null) {
+                    _nameController.text = val.name;
+                  }
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Vincular a Insumo Médico en Inventario',
+                prefixIcon: Icon(Icons.inventory_2_outlined, color: AppColors.primaryGreen),
+              ),
+            ),
+            const SizedBox(height: 15),
+
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
@@ -1214,6 +1285,70 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
               ),
             ),
             const SizedBox(height: 15),
+
+            // Si hay insumo seleccionado, pedir dosis por animal y mostrar resumen
+            if (_selectedInventoryItem != null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _dosesPerAnimalController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'Dosis por Animal (${_selectedInventoryItem!.unit})',
+                        prefixIcon: const Icon(Icons.vaccines, color: AppColors.primaryGreen),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isInsufficient ? Colors.red.withOpacity(0.1) : AppColors.primaryGreen.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: isInsufficient ? Colors.red : AppColors.primaryGreen),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(isInsufficient ? Icons.warning_amber_rounded : Icons.check_circle_outline, color: isInsufficient ? Colors.red : AppColors.primaryGreen, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Total a descontar del inventario: $calculatedTotalDoses ${_selectedInventoryItem!.unit}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: isInsufficient ? Colors.red : AppColors.primaryGreen,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '($dosesPerAnimal ${_selectedInventoryItem!.unit} x $targetAnimalCount animal(es)) • Stock actual: ${_selectedInventoryItem!.stock} ${_selectedInventoryItem!.unit}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                    ),
+                    if (isInsufficient)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          '⚠️ Atención: Las dosis solicitadas superan el stock registrado en inventario.',
+                          style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 15),
+            ],
+
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(_selectedType == HealthRecordType.treatment ? 'Fecha de Inicio del Tratamiento' : 'Fecha de Aplicación'),
@@ -1310,12 +1445,15 @@ class _HealthEntryFormState extends State<HealthEntryForm> {
                     ? (_treatmentFrequency == 'Otra (especificar)' ? _customFrequencyController.text.trim() : _treatmentFrequency) 
                     : null,
                   assignedTo: _assignedTo,
+                  inventoryItemId: _selectedInventoryItem?.id,
+                  dosesPerAnimal: _selectedInventoryItem != null ? dosesPerAnimal : null,
+                  totalDosesApplied: _selectedInventoryItem != null ? calculatedTotalDoses : null,
                 );
 
                 if (widget.initialRecord != null) {
                   animalService.updateHealthRecord(widget.initialRecord!.id, newRecord.toMap());
                 } else {
-                  animalService.addHealthRecord(newRecord);
+                  animalService.addHealthRecord(newRecord, inventoryService: inventoryService);
                 }
                 Navigator.pop(context); // Cierra el BottomSheet
               },

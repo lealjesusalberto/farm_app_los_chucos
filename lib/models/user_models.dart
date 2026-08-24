@@ -94,4 +94,12 @@ class AppUser {
 
   // Solo el presidente puede actualizar o eliminar registros en módulos principales
   bool get canUpdateOrDeleteRecords => role == UserRole.presidente;
+
+  bool get canEditAnimal => role == UserRole.presidente || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+
+  bool get needsApprovalToEdit => role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+
+  bool get canDeleteAnimal => role == UserRole.presidente || role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
+
+  bool get needsApprovalToDelete => role == UserRole.gerenteOperaciones || role == UserRole.operadorOrdeno;
 }

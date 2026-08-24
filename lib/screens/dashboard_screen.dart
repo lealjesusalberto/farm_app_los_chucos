@@ -19,6 +19,8 @@ import 'package:intl/intl.dart';
 import '../models/land_models.dart';
 import '../models/task_models.dart';
 import 'user_management_screen.dart';
+import 'animal_requests_screen.dart';
+import 'workers_module_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -545,11 +547,32 @@ class DashboardScreen extends StatelessWidget {
     if (user?.canAccessUsersModule ?? false) {
       modules.add(_buildModuleItem(
         context,
+        'Recursos Humanos',
+        'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=500&q=80',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkersModuleScreen()),
+        ),
+      ));
+      modules.add(_buildModuleItem(
+        context,
         'Usuarios',
         'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=500',
         () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+        ),
+      ));
+    }
+
+    if (user?.role == UserRole.presidente) {
+      modules.add(_buildModuleItem(
+        context,
+        'Solicitudes',
+        'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&q=80',
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AnimalRequestsScreen()),
         ),
       ));
     }
@@ -668,13 +691,31 @@ class DashboardScreen extends StatelessWidget {
                   title: const Text('Inicio'),
                   onTap: () => Navigator.pop(context),
                 ),
-                if (user?.canAccessUsersModule ?? false)
+                if (user?.canAccessUsersModule ?? false) ...[
+                  ListTile(
+                    leading: const Icon(Icons.badge_outlined, color: Colors.grey),
+                    title: const Text('Recursos Humanos (RRHH)'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkersModuleScreen()));
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.people, color: Colors.grey),
                     title: const Text('Gestión de Usuarios'),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const UserManagementScreen()));
+                    },
+                  ),
+                ],
+                if (user?.role == UserRole.presidente)
+                  ListTile(
+                    leading: const Icon(Icons.playlist_add_check_rounded, color: Colors.grey),
+                    title: const Text('Solicitudes de Ganado'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AnimalRequestsScreen()));
                     },
                   ),
               ],

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/animal_models.dart';
+import '../models/inventory_models.dart';
+import 'inventory_service.dart';
 
 class AnimalService extends ChangeNotifier {
   final DatabaseReference _animalsRef = FirebaseDatabase.instance.ref('animals');
@@ -10,6 +12,7 @@ class AnimalService extends ChangeNotifier {
   final DatabaseReference _weightRef = FirebaseDatabase.instance.ref('weightRecords');
   final DatabaseReference _healthRef = FirebaseDatabase.instance.ref('healthRecords');
   final DatabaseReference _individualMilkRef = FirebaseDatabase.instance.ref('individualMilkRecords');
+  final DatabaseReference _editRequestsRef = FirebaseDatabase.instance.ref('animalEditRequests');
 
   List<Animal> _animals = [];
   List<MilkRecord> _milkRecords = [];
@@ -18,6 +21,7 @@ class AnimalService extends ChangeNotifier {
   List<WeightRecord> _weightRecords = [];
   List<HealthRecord> _healthRecords = [];
   List<IndividualMilkRecord> _individualMilkRecords = [];
+  List<AnimalEditRequest> _editRequests = [];
 
   List<Animal> get animals => _animals.where((a) => a.status == 'active').toList();
   List<Animal> get deadAnimals => _animals.where((a) => a.status == 'dead').toList();
@@ -27,6 +31,7 @@ class AnimalService extends ChangeNotifier {
   List<WeightRecord> get weightRecords => List.unmodifiable(_weightRecords);
   List<HealthRecord> get healthRecords => List.unmodifiable(_healthRecords);
   List<IndividualMilkRecord> get individualMilkRecords => List.unmodifiable(_individualMilkRecords);
+  List<AnimalEditRequest> get editRequests => _editRequests;
 
   AnimalService() {
     _listenToAnimals();
@@ -36,6 +41,7 @@ class AnimalService extends ChangeNotifier {
     _listenToWeightRecords();
     _listenToHealthRecords();
     _listenToIndividualMilkRecords();
+    _listenToEditRequests();
   }
 
   void _listenToAnimals() {
@@ -199,6 +205,29 @@ class AnimalService extends ChangeNotifier {
     }, onError: (error) => debugPrint('Permiso denegado en individualMilkRecords: $error'));
   }
 
+  void _listenToEditRequests() {
+    _editRequestsRef.onValue.listen((event) {
+      try {
+        List<AnimalEditRequest> temp = [];
+        if (event.snapshot.exists && event.snapshot.value != null) {
+          final data = event.snapshot.value;
+          if (data is Map) {
+            data.forEach((key, value) {
+              if (value is Map) {
+                temp.add(AnimalEditRequest.fromMap(key.toString(), Map<String, dynamic>.from(value)));
+              }
+            });
+            temp.sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+          }
+        }
+        _editRequests = temp;
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error en listener de edit requests: $e');
+      }
+    }, onError: (error) => debugPrint('Permiso denegado en edit requests: $error'));
+  }
+
   Future<void> addAnimal(Animal animal) async {
     final temp = List<Animal>.from(_animals)..insert(0, animal);
     _animals = temp;
@@ -215,6 +244,39 @@ class AnimalService extends ChangeNotifier {
       notifyListeners();
     }
     await _animalsRef.child(animal.id).update(animal.toMap());
+  }
+
+  Future<void> markAnimalAsSold(String animalId) async {
+    final index = _animals.indexWhere((a) => a.id == animalId);
+    if (index != -1) {
+      final updatedAnimal = _animals[index].copyWith(status: 'sold');
+      final temp = List<Animal>.from(_animals);
+      temp[index] = updatedAnimal;
+      _animals = temp;
+      notifyListeners();
+      await _animalsRef.child(animalId).update({'status': 'sold'});
+    }
+  }
+
+  Future<void> addEditRequest(AnimalEditRequest request) async {
+    await _editRequestsRef.push().set(request.toMap());
+  }
+
+  Future<void> approveEditRequest(AnimalEditRequest request) async {
+    // 1. Aplicar cambios o eliminar el animal en la DB según el tipo de solicitud
+    if (request.requestType == 'delete') {
+      await _animalsRef.child(request.animalId).remove();
+    } else {
+      await _animalsRef.child(request.animalId).update(request.newData);
+    }
+    
+    // 2. Cambiar estado de la solicitud en la DB
+    await _editRequestsRef.child(request.id).update({'status': 'approved'});
+  }
+
+  Future<void> rejectEditRequest(String requestId) async {
+    // Cambiar estado de la solicitud en la DB
+    await _editRequestsRef.child(requestId).update({'status': 'rejected'});
   }
 
   Future<void> deleteAnimal(String id) async {
@@ -277,11 +339,25 @@ class AnimalService extends ChangeNotifier {
     await _weightRef.child(id).remove();
   }
 
-  Future<void> addHealthRecord(HealthRecord record) async {
+  Future<void> addHealthRecord(HealthRecord record, {InventoryService? inventoryService}) async {
     final temp = List<HealthRecord>.from(_healthRecords)..insert(0, record);
     _healthRecords = temp;
     notifyListeners();
     await _healthRef.push().set(record.toMap());
+
+    // Si tiene insumo médico asociado y dosis aplicadas, descontar del inventario
+    if (inventoryService != null && record.inventoryItemId != null && record.totalDosesApplied != null && record.totalDosesApplied! > 0) {
+      final tx = InventoryTransaction(
+        id: '',
+        itemId: record.inventoryItemId!,
+        quantity: record.totalDosesApplied!,
+        type: 'Salida',
+        date: record.date,
+        responsible: record.assignedTo != null && record.assignedTo!.isNotEmpty ? record.assignedTo! : 'Veterinaria',
+        notes: 'Uso veterinario (${record.type.name}): ${record.name} en ${record.herd}',
+      );
+      await inventoryService.addTransaction(tx);
+    }
   }
 
   Future<void> updateHealthRecord(String id, Map<String, dynamic> updates) async {
